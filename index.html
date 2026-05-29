@@ -31,7 +31,13 @@
         </label>
         <label>
           <span>数値</span>
-          <input id="savedPointValue" type="text" inputmode="none" placeholder="10.830" readonly>
+          <input id="savedPointValue" type="text" inputmode="decimal" placeholder="10.830">
+        </label>
+        <label>
+          <span>測量結果から取得</span>
+          <select id="measuredPointSelect">
+            <option value="">選択してください</option>
+          </select>
         </label>
         <button id="savePoint" type="button">台帳に保存</button>
         <div id="pointList" class="point-list"></div>

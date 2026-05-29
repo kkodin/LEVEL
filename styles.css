@@ -22,7 +22,7 @@ body {
   overscroll-behavior: contain;
   touch-action: manipulation;
 }
-button, input { font: inherit; }
+button, input, select { font: inherit; }
 button {
   border: 1px solid var(--accent);
   border-radius: 7px;
@@ -44,6 +44,15 @@ input {
   outline: none;
   font-size: 16px;
   touch-action: manipulation;
+}
+select {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid #cfd8ce;
+  border-radius: 5px;
+  padding: 5px 7px;
+  background: #fff;
+  font-size: 16px;
 }
 input:focus {
   border-color: var(--accent);
@@ -285,12 +294,17 @@ label span {
   background: #f8fbf8;
   color: var(--ink);
   text-align: left;
+  transition: transform 120ms ease, opacity 120ms ease;
+  touch-action: pan-y;
 }
 .point-item strong,
 .point-item span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.point-item.swiping {
+  opacity: 0.72;
 }
 @media (min-width: 720px) {
   .app {

@@ -113,6 +113,7 @@ function render() {
   updateReadout();
   updateModes();
   renderPointList();
+  renderMeasuredPointSelect();
 }
 
 function selectCell(row, field) {
@@ -127,8 +128,6 @@ function updateReadout() {
   $("#activeType").textContent = selected.field.toUpperCase();
   $("#activePoint").value = row.point || "";
   $("#activeValue").textContent = buffer || row[selected.field] || "-";
-  $("#savedPointName").value = row.point || "";
-  $("#savedPointValue").value = selected.field === "point" ? "" : (row[selected.field] || buffer || "");
 }
 
 function updateModes() {
@@ -240,6 +239,8 @@ function speakKey(key) {
 }
 
 function openDrawer() {
+  clearPointEntry();
+  renderMeasuredPointSelect();
   $("#drawer").classList.add("open");
   $("#drawerBackdrop").classList.add("open");
 }
@@ -250,9 +251,8 @@ function closeDrawer() {
 }
 
 function saveCurrentPoint() {
-  finalizeSelectedValue();
-  const name = $("#savedPointName").value.trim() || rows[selected.row]?.point || "";
-  const value = fmtInput($("#savedPointValue").value || rows[selected.row]?.[selected.field] || buffer);
+  const name = $("#savedPointName").value.trim();
+  const value = fmtInput($("#savedPointValue").value);
   if (!name || !value) return;
   const existing = savedPoints.find((point) => point.name === name);
   if (existing) {
@@ -260,19 +260,17 @@ function saveCurrentPoint() {
   } else {
     savedPoints.push({ name, value });
   }
+  clearPointEntry();
   renderPointList();
   saveSoon();
 }
 
 function recallPoint(point) {
-  if (!rows[selected.row]) rows[selected.row] = blankRow();
-  rows[selected.row].point = point.name;
-  if (selected.field !== "point") {
-    rows[selected.row][selected.field] = point.value;
-    buffer = point.value;
-    if (selected.row === 0 && selected.field === "gl") $("#baseGl").value = point.value;
-  }
-  if (selected.row === 0) $("#basePoint").value = point.name;
+  rows[0] = blankRow({ ...rows[0], point: point.name, gl: point.value });
+  $("#basePoint").value = point.name;
+  $("#baseGl").value = point.value;
+  selected = { row: 0, field: "gl" };
+  buffer = point.value;
   closeDrawer();
   render();
   saveSoon();
@@ -282,13 +280,95 @@ function renderPointList() {
   const list = $("#pointList");
   if (!list) return;
   list.innerHTML = "";
-  savedPoints.forEach((point) => {
+  savedPoints.forEach((point, index) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "point-item";
     button.innerHTML = `<strong>${escapeHtml(point.name)}</strong><span>${escapeHtml(point.value)}</span>`;
-    button.addEventListener("click", () => recallPoint(point));
+    button.addEventListener("click", () => {
+      if (button.dataset.swiped === "1") {
+        button.dataset.swiped = "";
+        return;
+      }
+      recallPoint(point);
+    });
+    bindSwipeDelete(button, index);
     list.appendChild(button);
+  });
+}
+
+function renderMeasuredPointSelect() {
+  const select = $("#measuredPointSelect");
+  if (!select) return;
+  const currentValue = select.value;
+  select.innerHTML = `<option value="">選択してください</option>`;
+  rows.forEach((row, index) => {
+    if (!row.point || !row.gl) return;
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = `${row.point} / GL ${row.gl}`;
+    select.appendChild(option);
+  });
+  select.value = currentValue;
+}
+
+function useMeasuredPoint() {
+  const index = Number($("#measuredPointSelect").value);
+  const row = rows[index];
+  if (!row) return;
+  $("#savedPointName").value = row.point || "";
+  $("#savedPointValue").value = fmtInput(row.gl || "");
+}
+
+function clearPointEntry() {
+  $("#savedPointName").value = "";
+  $("#savedPointValue").value = "";
+  $("#measuredPointSelect").value = "";
+}
+
+function deleteSavedPoint(index) {
+  savedPoints.splice(index, 1);
+  renderPointList();
+  saveSoon();
+}
+
+function bindSwipeDelete(element, index) {
+  let startX = 0;
+  let currentX = 0;
+  let swiping = false;
+
+  element.addEventListener("pointerdown", (event) => {
+    startX = event.clientX;
+    currentX = startX;
+    swiping = true;
+    element.setPointerCapture?.(event.pointerId);
+  });
+
+  element.addEventListener("pointermove", (event) => {
+    if (!swiping) return;
+    currentX = event.clientX;
+    const dx = currentX - startX;
+    if (Math.abs(dx) < 8) return;
+    element.classList.add("swiping");
+    element.style.transform = `translateX(${Math.max(-90, Math.min(90, dx))}px)`;
+  });
+
+  element.addEventListener("pointerup", () => {
+    if (!swiping) return;
+    swiping = false;
+    const dx = currentX - startX;
+    element.classList.remove("swiping");
+    element.style.transform = "";
+    if (Math.abs(dx) > 70) {
+      element.dataset.swiped = "1";
+      deleteSavedPoint(index);
+    }
+  });
+
+  element.addEventListener("pointercancel", () => {
+    swiping = false;
+    element.classList.remove("swiping");
+    element.style.transform = "";
   });
 }
 
@@ -309,6 +389,7 @@ function bind() {
   $("#menuClose").addEventListener("click", closeDrawer);
   $("#drawerBackdrop").addEventListener("click", closeDrawer);
   $("#savePoint").addEventListener("click", saveCurrentPoint);
+  $("#measuredPointSelect").addEventListener("change", useMeasuredPoint);
   $("#savedPointValue").addEventListener("click", () => {
     const value = rows[selected.row]?.[selected.field] || buffer || "";
     $("#savedPointValue").value = value;
