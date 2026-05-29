@@ -1,0 +1,53 @@
+{
+  "version": "split-2026-05-18",
+  "savedAt": "2026-05-18T01:17:47.679Z",
+  "site": {
+    "name": "館町下水",
+    "span": "１~2",
+    "date": "2026-05-18"
+  },
+  "soil": {
+    "type": "粘性土",
+    "gamma": 13,
+    "phi": 5,
+    "c": 3,
+    "N": 4,
+    "cover": 5.31
+  },
+  "pipe": {
+    "category": "ヒューム管",
+    "strength": "1種",
+    "joint": "JC",
+    "size": 1350,
+    "inner": 1.35,
+    "outer": 1.6,
+    "thickness": 0.125,
+    "area": 0.5792,
+    "weight": 14.191,
+    "length": 1.2,
+    "cushion": 20,
+    "cushionCrush": 2,
+    "allowOpen": 60,
+    "allowForce": 7530
+  },
+  "survey": {
+    "ox": 0,
+    "oy": 0,
+    "bx": 10,
+    "by": 0
+  },
+  "alignment": {
+    "baseAz": 0,
+    "curves": [
+      {
+        "L": 28.895,
+        "R": 40,
+        "dir": "L",
+        "deg": 56,
+        "min": 31,
+        "sec": 20
+      }
+    ],
+    "finalL": 25.254
+  }
+}

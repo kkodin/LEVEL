@@ -1,0 +1,336 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>00 基本情報入力・保存読込</title><style>
+:root{--blue:#0055a4;--bg:#f4f6f8;--line:#d8dee6;--text:#1f2937;--ok:#177245;--warn:#b45309;--ng:#b91c1c;}
+*{box-sizing:border-box} body{font-family:Meiryo,"Yu Gothic",sans-serif;margin:0;background:var(--bg);color:var(--text);font-size:14px} header{background:#003366;color:#fff;padding:12px 18px;font-weight:bold;display:flex;justify-content:space-between;align-items:center} main{max-width:1120px;margin:18px auto;padding:0 14px}.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;margin:14px 0;box-shadow:0 2px 8px rgba(0,0,0,.05)}h1{font-size:20px;margin:0}h2{font-size:17px;border-left:6px solid var(--blue);padding-left:10px;margin:4px 0 14px}.grid{display:grid;grid-template-columns:repeat(2,minmax(260px,1fr));gap:12px 24px}.row{display:flex;align-items:center;gap:8px;margin:8px 0}.row label{min-width:180px;text-align:right;font-weight:bold;color:#374151}input,select,button,textarea{font-family:inherit;font-size:14px}input,select,textarea{border:1px solid #b8c0cc;border-radius:6px;padding:7px 9px;background:#fff}input.num{text-align:right;ime-mode:disabled;width:120px;font-family:Consolas,monospace}input:focus,select:focus,textarea:focus{outline:2px solid #93c5fd;border-color:#2563eb}button{border:0;border-radius:7px;padding:9px 14px;font-weight:bold;cursor:pointer;background:#2563eb;color:#fff}button.secondary{background:#64748b}button.ok{background:#17803d}button.warn{background:#d97706}button.danger{background:#b91c1c}.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.note{font-size:12px;color:#64748b;line-height:1.6}.pill{display:inline-block;border-radius:999px;padding:4px 9px;font-weight:bold}.pill.ok{background:#dcfce7;color:#166534}.pill.warn{background:#fef3c7;color:#92400e}.pill.ng{background:#fee2e2;color:#991b1b}table{border-collapse:collapse;width:100%;background:#fff;margin-top:10px}th,td{border:1px solid #cfd7e3;padding:7px;text-align:center}th{background:#334155;color:#fff}.mono{font-family:Consolas,monospace}.small{font-size:12px}.hide{display:none}.full{width:100%}.choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.choice-card{border:1px solid #cfd7e3;border-radius:10px;padding:14px;background:#f8fafc}.choice-card h3{margin:0 0 8px;font-size:16px}.choice-card button{width:100%;margin-top:10px}.startup-current{border:1px solid #cfd7e3;border-radius:8px;background:#f8fafc;padding:10px;margin:8px 0}.startup-current b{display:block;margin-bottom:4px}.work-grid{display:grid;grid-template-columns:repeat(2,minmax(220px,1fr));gap:10px}.work-grid button{text-align:left;min-height:46px}.base-locked{display:none}body.base-form-visible .base-locked{display:block}#workMenu{display:none}body.base-ready #workMenu{display:block}@media(max-width:760px){.work-grid{grid-template-columns:1fr}}.input-accessory{position:fixed;left:0;right:0;bottom:0;z-index:10001;display:none;grid-template-columns:1fr 1fr auto;gap:8px;align-items:center;padding:8px max(10px,env(safe-area-inset-left)) calc(8px + env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-right));background:rgba(15,23,42,.94);box-shadow:0 -8px 24px rgba(0,0,0,.2)}.input-accessory.visible{display:grid}.input-accessory button{min-height:38px;padding:8px 12px;border-radius:8px;background:#475569}.input-accessory button.primary{background:#2563eb}@media(max-width:760px){body.input-active header .toolbar,body.input-active .card.toolbar{display:none!important}body.input-active main{padding-bottom:74px}body{font-size:13px;background:#fff}header{position:sticky;top:0;z-index:50;display:block;padding:10px 12px}h1{font-size:17px;margin-bottom:8px}main{margin:10px auto;padding:0 8px}.toolbar{display:grid;grid-template-columns:1fr 1fr;gap:8px}.toolbar button{width:100%;padding:10px 8px}.card{border-radius:10px;padding:12px;margin:10px 0;box-shadow:none}.grid,.choice-grid{grid-template-columns:1fr;gap:8px}.row{display:grid;grid-template-columns:1fr 1fr;gap:6px 8px;align-items:center}.row label{grid-column:1 / -1;text-align:left;min-width:0}.row input,.row select{width:100%;min-height:38px;font-size:16px}input.num{width:100%}}
+
+header .toolbar{display:none!important}
+body:not(.base-ready) #workMenu{display:none!important}
+body:not(.base-ready) #baseForm{display:none!important}
+body:not(.base-ready) #rightPane{display:none!important}
+body.base-ready #startMenu{display:none!important}
+body.base-ready main.app-layout{display:grid;grid-template-columns:300px minmax(0,1fr);gap:14px;max-width:1440px}
+body.base-ready #workMenu{display:block!important;position:sticky;top:12px;align-self:start;margin:0;max-height:calc(100vh - 24px);overflow:auto}
+body.base-ready #baseForm{display:block}
+body.show-frame #baseForm{display:none!important}
+#rightPane{display:none}
+body.show-frame #rightPane{display:block}
+#workFrame{width:100%;height:calc(100vh - 40px);min-height:760px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.startup-current.empty + .choice-grid .use-current-card{display:none}
+.menu-note{font-size:12px;color:#64748b;line-height:1.5;margin:6px 0 12px}
+.work-grid{grid-template-columns:1fr!important}
+.work-grid button{width:100%}
+.work-grid button.locked{opacity:.45;cursor:not-allowed;background:#94a3b8}
+.frame-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.frame-title b{font-size:15px}
+@media(max-width:900px){body.base-ready main.app-layout{grid-template-columns:1fr}body.base-ready #workMenu{position:relative;top:auto;max-height:none}#workFrame{height:80vh;min-height:640px}}
+
+</style></head><body><header><h1>00 基本情報入力・保存読込</h1><div class="toolbar"><button onclick="document.getElementById('file').click()">JSON読込</button><button class="ok" onclick="saveProject()">JSON保存</button></div></header><main>
+<input id="file" type="file" accept=".json,application/json" class="hide" onchange="loadProjectFile(this,(p)=>{applyBase(p);renderCurves(p.alignment?.curves||[]);})">
+<div class="card" id="startMenu">
+  <h2>&#22522;&#32218;&#12487;&#12540;&#12479;&#12398;&#36984;&#25246;</h2>
+  <p class="note">&#26368;&#24460;&#12395;&#20351;&#12387;&#12383;&#22522;&#32218;&#24773;&#22577;&#12434;&#34920;&#31034;&#12375;&#12414;&#12377;&#12290;&#12371;&#12398;&#22522;&#32218;&#12391;&#20316;&#26989;&#12377;&#12427;&#12363;&#12289;&#12501;&#12449;&#12452;&#12523;&#12434;&#35501;&#12415;&#36796;&#12416;&#12363;&#12289;&#26032;&#35215;&#20837;&#21147;&#12377;&#12427;&#12363;&#12434;&#36984;&#12435;&#12391;&#12367;&#12384;&#12373;&#12356;&#12290;</p>
+  <div id="currentBaseInfo" class="startup-current"></div>
+  <div class="choice-grid">
+    <div class="choice-card use-current-card">
+      <h3>この基線情報を使う</h3>
+      <p class="note">&#34920;&#31034;&#12373;&#12428;&#12390;&#12356;&#12427;&#29694;&#22580;&#21517;&#12289;&#12473;&#12497;&#12531;&#21517;&#12289;&#20316;&#25104;&#26085;&#26178;&#12398;&#22522;&#32218;&#24773;&#22577;&#12391;&#20316;&#26989;&#12434;&#32154;&#12369;&#12414;&#12377;&#12290;</p>
+      <button class="ok" onclick="selectCurrentBase()">&#12371;&#12398;&#22522;&#32218;&#24773;&#22577;&#12434;&#20351;&#12358;</button>
+    </div>
+    <div class="choice-card">
+      <h3>基線JSONを読み込む</h3>
+      <p class="note">&#20445;&#23384;&#28168;&#12415;&#12398;&#22522;&#32218;JSON&#12501;&#12449;&#12452;&#12523;&#12434;&#36984;&#12435;&#12391;&#20316;&#26989;&#12375;&#12414;&#12377;&#12290;</p>
+      <button onclick="chooseBaseFile()">&#22522;&#32218;JSON&#12434;&#35501;&#12415;&#36796;&#12416;</button>
+    </div>
+    <div class="choice-card">
+      <h3>新規入力を始める</h3>
+      <p class="note">&#29694;&#22580;&#21517;&#12289;&#12473;&#12497;&#12531;&#21517;&#12394;&#12393;&#12398;&#24517;&#38920;&#24773;&#22577;&#12434;&#20837;&#21147;&#12375;&#12390;&#26032;&#12375;&#12356;&#22522;&#32218;&#12487;&#12540;&#12479;&#12434;&#20316;&#25104;&#12375;&#12414;&#12377;&#12290;</p>
+      <button class="warn" onclick="startNewBase()">&#26032;&#35215;&#20837;&#21147;&#12434;&#22987;&#12417;&#12427;</button>
+    </div>
+  </div>
+</div>
+<div class="card" id="workMenu">
+  <h2>作業メニュー</h2>
+  <div class="menu-note">左で作業を選ぶと、右側にページを表示します。</div>
+  <div class="work-grid">
+    <button onclick="openWork('basic')">1. 基本データ（管径、管種、土質、基線データ）の入力</button>
+    <button onclick="openWork('calc')">2. 基線の計算結果（座標の表示）</button>
+    <button onclick="openWork('visual')">3. ビジュアルグラフ表示</button>
+    <button onclick="openWork('measurement')">4. 測量結果入力ページの表示</button>
+    <button onclick="openWork('joint')">5. 目地開き判定ページ</button>
+    <button onclick="openWork('force')">6. 推力計算ページ</button>
+  </div>
+</div>
+<div id="baseForm" class="base-locked"><div class="card"><h2>現場情報</h2><div class="grid"><div class="row"><label>現場名</label><input id="siteName" value="八王子市 1350刃口推進工"></div><div class="row"><label>スパン名</label><input id="spanName" value="1～2"></div><div class="row"><label>入力日</label><input type="date" id="inputDate"><button class="secondary" onclick="set('inputDate',today())">今日</button></div></div></div>
+<div class="card"><h2>土質条件</h2><div class="grid"><div class="row"><label>土質区分</label><select id="soilType"><option>粘性土</option><option>砂質土</option><option>礫質土</option></select></div><div class="row"><label>単位体積重量 γ</label><input class="num" id="soilWeight" value="13.000"> kN/m³</div><div class="row"><label>内部摩擦角 φ</label><input class="num" id="soilPhi" value="5.000"> °</div><div class="row"><label>粘着力 C</label><input class="num" id="soilC" value="3.000"> kN/m²</div><div class="row"><label>N値</label><input class="num" id="soilN" value="4.0"></div><div class="row"><label>平均土かぶり H</label><input class="num" id="soilH" value="5.310"> m</div></div></div>
+<div class="card"><h2>推進管仕様</h2><div class="grid"><div class="row"><label>管種</label><select id="pipeCategory" onchange="calcPipe()"><option>ヒューム管</option><option>レジン管</option><option>鋼管</option></select></div><div class="row"><label>強度/分類</label><select id="pipeStrength"><option>1種</option><option>2種</option><option>RS</option><option>RM</option><option>標準鋼管</option></select></div><div class="row"><label>継手</label><select id="jointType" onchange="jointChanged()"><option value="JC">JC 許容60mm</option><option value="JB">JB 許容40mm</option><option value="JA">JA 許容30mm</option></select></div><div class="row"><label>呼び径</label><select id="pipeSize" onchange="calcPipe()"></select> mm</div><div class="row"><label>内径</label><input class="num" id="pipeInner"> m</div><div class="row"><label>外径</label><input class="num" id="pipeOuter"> m</div><div class="row"><label>管厚 t</label><input class="num" id="pipeT"> m</div><div class="row"><label>有効断面積 Ae</label><input class="num" id="pipeArea"> m²</div><div class="row"><label>管重量 W</label><input class="num" id="pipeWeight"> kN/m</div><div class="row"><label>管有効長 L</label><input class="num" id="pipeLength" value="2.4300"> m</div><div class="row"><label>クッション材厚 S4</label><input class="num" id="cushionT" value="10.0"> mm</div><div class="row"><label>想定潰れ代</label><input class="num" id="cushionCrush" value="2.0"> mm</div><div class="row"><label>許容開口長</label><input class="num" id="allowOpen" value="60.0"> mm</div><div class="row"><label>許容耐荷力 Fa</label><input class="num" id="allowForce" value="0"> kN</div></div><p class="note">寸法は自動入力後、現場資料に合わせて手修正できます。JSON読込時は、保存済みの管有効長を優先して上書きしません。</p></div>
+<div class="card"><h2>測量基準・平面線形</h2><div class="grid"><div class="row"><label>機械据付 OX</label><input class="num" id="instX" value="0.000"></div><div class="row"><label>OY</label><input class="num" id="instY" value="0.000"></div><div class="row"><label>後視点 BX</label><input class="num" id="bsX" value="10.000"></div><div class="row"><label>BY</label><input class="num" id="bsY" value="0.000"></div><div class="row"><label>基準方向角</label><input class="num" id="baseAz" value="0.000"> °</div></div><hr><div id="curves"></div><button onclick="addCurve()">曲線追加</button><div class="row"><label>最終IP〜EP距離</label><input class="num" id="finalL" value="2.150"> m</div></div>
+<div class="card toolbar"><button class="ok" onclick="saveProject()">保存JSONを作成</button><button onclick="openModule('01_alignment_calculation.html')">線形計算へ</button><button onclick="openModule('02_alignment_visual.html')">ビジュアル表示へ</button><button onclick="openModule('03_joint_opening_check.html')">目地判定へ</button><button onclick="openModule('04_jacking_force.html')">推力管理へ</button><button onclick="openModule('05_measurement_horizontal_error.html')">測量・水平誤差へ</button></div>
+</div></main><script>
+const PIPE_SIZES=[250,300,350,400,450,500,600,700,800,900,1000,1100,1200,1350,1500,1650,1800,2000,2200,2400,2600,2800,3000];
+const HUME_T={250:55,300:57,350:60,400:63,450:67,500:70,600:76,700:82,800:80,900:90,1000:100,1100:105,1200:115,1350:125,1500:140,1650:150,1800:160,2000:175,2200:190,2400:205,2600:220,2800:235,3000:250};
+
+function hasUsableBase(p=getProject()){
+  return !!(p && p.site && String(p.site.name||'').trim() && String(p.site.span||'').trim() && p.alignment && Array.isArray(p.alignment.curves));
+}
+function setAppLayout(){
+  document.querySelector('main')?.classList.add('app-layout');
+  if(!document.getElementById('rightPane')){
+    const pane=document.createElement('div');
+    pane.id='rightPane';
+    pane.innerHTML='<div class="frame-title"><b id="rightPaneTitle">作業ページ</b><button class="secondary" type="button" onclick="showBasicPane()">基線入力へ戻る</button></div><iframe id="workFrame" title="作業ページ"></iframe>';
+    document.querySelector('main')?.appendChild(pane);
+  }
+  const start=document.getElementById('startMenu');
+  if(start){
+    const p=getProject();
+    const current=start.querySelector('#currentBaseInfo');
+    current?.classList.toggle('empty',!hasUsableBase(p));
+  }
+}
+function showBasicPane(){
+  document.body.classList.remove('show-frame');
+  document.getElementById('rightPaneTitle')&&(document.getElementById('rightPaneTitle').textContent='基本データ');
+}
+function showFramePage(title, file){
+  if(!hasUsableBase()){
+    alert('先に基線情報を入力または読み込んでください。');
+    document.body.classList.remove('base-ready','show-frame');
+    document.getElementById('startMenu')?.scrollIntoView({block:'start'});
+    return;
+  }
+  saveCurrentBase(false);
+  document.body.classList.add('show-frame');
+  const titleEl=document.getElementById('rightPaneTitle');
+  if(titleEl)titleEl.textContent=title;
+  const frame=document.getElementById('workFrame');
+  if(frame)frame.src=file;
+}
+function refreshCurrentChoice(){
+  const p=getProject();
+  const current=document.getElementById('currentBaseInfo');
+  if(current)current.classList.toggle('empty',!hasUsableBase(p));
+}
+
+function n(id,def=0){const el=document.getElementById(id); const v=el?parseFloat(String(el.value).replace(',','')):NaN; return Number.isFinite(v)?v:def;}
+function v(id,def=''){const el=document.getElementById(id);return el?el.value:def}
+function set(id,val){const el=document.getElementById(id); if(el) el.value=val}
+function today(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function dmsToDeg(d,m,s){return (+d||0)+(+m||0)/60+(+s||0)/3600}
+function pipeDefault(size,cat='ヒューム管'){
+  const inner=size/1000; let t=(HUME_T[size]||125)/1000; let unitW=24.5;
+  if(cat==='レジン管'){t=Math.max(0.02, inner*0.045); unitW=19.5}
+  if(cat==='鋼管'){t=size>=2000?0.019:(size>=1500?0.016:(size>=1000?0.0127:0.0095)); unitW=78.5}
+  const outer=inner+2*t; const area=Math.PI/4*(outer*outer-inner*inner); const weight=area*unitW; const len=size<350?2.0:2.43;
+  return {inner,outer,t,area,weight,len,centerR:(inner+t)/2};
+}
+function collectBase(){
+  const curves=[]; document.querySelectorAll('.curve').forEach((el,i)=>curves.push({L:+el.querySelector('.cL').value||0,R:+el.querySelector('.cR').value||0,dir:el.querySelector('.cDir').value,deg:+el.querySelector('.cDeg').value||0,min:+el.querySelector('.cMin').value||0,sec:+el.querySelector('.cSec').value||0}));
+  return {version:'split-2026-05-18',savedAt:new Date().toISOString(),site:{name:v('siteName'),span:v('spanName'),date:v('inputDate')},soil:{type:v('soilType'),gamma:n('soilWeight'),phi:n('soilPhi'),c:n('soilC'),N:n('soilN'),cover:n('soilH')},pipe:{category:v('pipeCategory'),strength:v('pipeStrength'),joint:v('jointType'),size:n('pipeSize'),inner:n('pipeInner'),outer:n('pipeOuter'),thickness:n('pipeT'),area:n('pipeArea'),weight:n('pipeWeight'),length:n('pipeLength'),cushion:n('cushionT'),cushionCrush:n('cushionCrush'),allowOpen:n('allowOpen'),allowForce:n('allowForce')},survey:{ox:n('instX'),oy:n('instY'),bx:n('bsX'),by:n('bsY')},alignment:{baseAz:n('baseAz'),curves,finalL:n('finalL')}};
+}
+function downloadJSON(obj,fn){const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fn||'project.json';a.click();URL.revokeObjectURL(a.href)}
+function safeName(s){return (s||'現場').replace(/[\\/:*?"<>|\s]+/g,'_')}
+function startNewBase(){document.getElementById('startMenu')?.scrollIntoView({block:'start'});document.getElementById('siteName')?.focus()}
+function currentBase(){return getProject()||collectBase()}
+function baseTitle(p){const site=p?.site?.name||'\u672a\u8a2d\u5b9a';const span=p?.site?.span||'\u672a\u8a2d\u5b9a';const date=p?.site?.date||'-';const saved=p?.savedAt?new Date(p.savedAt).toLocaleString():'-';return {site,span,date,saved}}
+function renderCurrentBase(){const box=document.getElementById('currentBaseInfo');if(!box)return;const p=getProject();if(!hasUsableBase(p)){box.classList.add('empty');box.innerHTML='<b>ブラウザに記憶されている基線情報はありません</b><span class="note">基線JSONを読み込むか、新規入力を始めてください。</span>';return}box.classList.remove('empty');const t=baseTitle(p);box.innerHTML=`<b>現在表示されている基線情報</b><div>現場名: ${t.site}</div><div>スパン名: ${t.span}</div><div>入力日: ${t.date}</div><div>作成日時: ${t.saved}</div>`}function showWorkMenu(showForm=false){document.body.classList.add('base-ready');document.body.classList.toggle('base-form-visible',!!showForm);document.body.classList.remove('show-frame');setAppLayout();if(showForm)document.getElementById('baseForm')?.scrollIntoView({block:'start'});else document.getElementById('workMenu')?.scrollIntoView({block:'start'})}
+function saveCurrentBase(download=false){if(!validateRequired())return null;const p=collectBase();localStorage.setItem('curvedJackingProject',JSON.stringify(p));renderCurrentBase();if(download)downloadJSON(p,projectFileName(p));return p}
+function validateRequired(){const required=[['siteName','\u73fe\u5834\u540d'],['spanName','\u30b9\u30d1\u30f3\u540d'],['inputDate','\u5165\u529b\u65e5']];for(const [id,label] of required){const el=document.getElementById(id);if(!String(el?.value||'').trim()){alert(label+'\u3092\u5165\u529b\u3057\u3066\u304f\u3060\u3055\u3044\u3002');el?.focus();return false}}return true}function selectCurrentBase(){const p=getProject();if(p){applyBase(p);renderCurves(p.alignment?.curves||[]);showWorkMenu(false)}else{startNewBase()}}
+function chooseBaseFile(){const input=document.getElementById('file');input.dataset.next='';input.click()}
+function startNewBase(){document.body.classList.add('base-ready','base-form-visible');set('siteName','');set('spanName','');set('inputDate',today());document.getElementById('siteName')?.focus();document.getElementById('baseForm')?.scrollIntoView({block:'start'})}
+function openWork(kind){
+  if(kind==='basic'){showWorkMenu(true);showBasicPane();return}
+  if(!hasUsableBase()){alert('先に基線情報を入力または読み込んでください。');document.body.classList.remove('base-ready','show-frame');return}
+  const pages={calc:'01_alignment_calculation.html',visual:'02_alignment_visual.html',measurement:'05_measurement_horizontal_error.html',joint:'03_joint_opening_check.html',force:'04_jacking_force.html'};
+  const titles={calc:'基線の計算結果',visual:'ビジュアルグラフ表示',measurement:'測量結果入力',joint:'目地開き判定',force:'推力計算'};
+  if(kind==='visual'){openModule(pages.visual);return}
+  if(pages[kind])showFramePage(titles[kind]||'作業ページ',pages[kind]);
+}
+function loadProjectFile(input,cb){const f=input.files[0]; if(!f)return; const r=new FileReader(); r.onload=()=>{try{const obj=JSON.parse(r.result); localStorage.setItem('curvedJackingProject',JSON.stringify(obj)); cb&&cb(obj); renderCurrentBase(); showWorkMenu(false); showBasicPane(); const next=input.dataset.next; input.dataset.next=''; input.value=''; if(next) showFramePage('作業ページ',next);}catch(e){alert('JSON読込に失敗しました: '+e.message)}}; r.readAsText(f,'utf-8')}function getProject(){try{return JSON.parse(localStorage.getItem('curvedJackingProject')||'null')}catch(e){return null}}
+function isEditableField(el){if(!el||el.disabled||el.readOnly)return false;if(el.matches('input[type="file"],input[type="hidden"],button'))return false;return el.matches('input,select,textarea')}
+function editableFields(){return [...document.querySelectorAll('input,select,textarea')].filter(isEditableField)}
+function activeInputIndex(){return editableFields().indexOf(document.activeElement)}
+function showInputAccessory(){}
+function hideInputAccessory(){document.body.classList.remove('input-active')}
+function closeInputAccessory(){document.activeElement?.blur?.();hideInputAccessory()}
+function updateInputAccessoryPosition(){}
+function focusRelativeInput(step){}
+function applyBase(p){if(!p)return; set('siteName',p.site?.name||'');set('spanName',p.site?.span||'');set('inputDate',p.site?.date||today());set('soilType',p.soil?.type||'粘性土');set('soilWeight',fmt(p.soil?.gamma??13,3));set('soilPhi',fmt(p.soil?.phi??5,3));set('soilC',fmt(p.soil?.c??3,3));set('soilN',fmt(p.soil?.N??4,1));set('soilH',fmt(p.soil?.cover??5.31,3));set('pipeCategory',p.pipe?.category||'ヒューム管');set('pipeStrength',p.pipe?.strength||'1種');set('jointType',p.pipe?.joint||'JC');set('pipeSize',p.pipe?.size||1350);set('pipeInner',fmt(p.pipe?.inner??1.35,3));set('pipeOuter',fmt(p.pipe?.outer??1.60,3));set('pipeT',fmt(p.pipe?.thickness??0.125,3));set('pipeArea',fmt(p.pipe?.area??0.579,4));set('pipeWeight',fmt(p.pipe?.weight??14.19,3));set('pipeLength',fmt(p.pipe?.length??2.43,4));set('cushionT',fmt(p.pipe?.cushion??10,1));set('cushionCrush',fmt(p.pipe?.cushionCrush??2,1));set('allowOpen',fmt(p.pipe?.allowOpen??60,1));set('allowForce',fmt(p.pipe?.allowForce??7527,0));set('instX',fmt(p.survey?.ox??0,3));set('instY',fmt(p.survey?.oy??0,3));set('bsX',fmt(p.survey?.bx??10,3));set('bsY',fmt(p.survey?.by??0,3));set('baseAz',fmt(p.alignment?.baseAz??0,3));set('finalL',fmt(p.alignment?.finalL??2.15,3));}
+function fmt(x,d=3){return (Number.isFinite(+x)?+x:0).toFixed(d)}
+function calcGeometry(p){
+  const pts=[],curves=[]; let x=0,y=0,az=(p.alignment?.baseAz||0)*Math.PI/180, accum=0; pts.push({name:'BP',x,y,label:'発進点'});
+  (p.alignment?.curves||[]).forEach((cd,i)=>{const L=+cd.L||0,R=+cd.R||0,IA=dmsToDeg(cd.deg,cd.min,cd.sec)*Math.PI/180,dir=cd.dir||'L'; const TL=R*Math.tan(IA/2),CL=R*IA,SL=R*(1/Math.cos(IA/2)-1); const ip={x:x+L*Math.cos(az),y:y+L*Math.sin(az)}; const bc={x:ip.x-TL*Math.cos(az),y:ip.y-TL*Math.sin(az)}; const outAz=az+(dir==='R'?IA:-IA); const ec={x:ip.x+TL*Math.cos(outAz),y:ip.y+TL*Math.sin(outAz)}; const roAz=az+(dir==='R'?Math.PI/2:-Math.PI/2); const ro={x:bc.x+R*Math.cos(roAz),y:bc.y+R*Math.sin(roAz)}; const straight=Math.hypot(bc.x-x,bc.y-y); const startDist=accum+straight,endDist=startDist+CL; accum=endDist; const c={id:i+1,L,R,IA,ia_deg:IA*180/Math.PI,dir,TL,CL,SL,ip,bc,ec,ro,inAz:az,outAz,startDist,endDist}; curves.push(c); pts.push({name:`IP${i+1}`,...ip,label:`交点${i+1}`},{name:`BC${i+1}`,...bc,label:`曲始${i+1}`},{name:`EC${i+1}`,...ec,label:`曲終${i+1}`},{name:`RO${i+1}`,...ro,label:`曲線中心${i+1}`}); x=ip.x;y=ip.y;az=outAz;});
+  const finalL=+p.alignment?.finalL||0; let ep; if(curves.length){const last=curves[curves.length-1]; ep={x:last.ip.x+finalL*Math.cos(last.outAz),y:last.ip.y+finalL*Math.sin(last.outAz)}; accum += Math.hypot(ep.x-last.ec.x,ep.y-last.ec.y)}else{ep={x:x+finalL*Math.cos(az),y:y+finalL*Math.sin(az)};accum+=finalL} pts.push({name:'EP',...ep,label:'到達点'}); return {points:pts,curves,totalDistance:accum};
+}
+function calcJoint(p,c){const L=p.pipe.length, D=p.pipe.inner, t=p.pipe.thickness, R=c.R, S4=p.pipe.cushion||0; const den=Math.max(0.0001,R-D/2); const S1=(L*D/den)*1000+S4; const S2=(L*Math.max(0,D-t)/den)*1000+S4; const S3=(L*t/den)*1000+S4; const simple=(D*2*Math.sin((L/R)/2))*1000+S4; return {S1,S2,S3,S4,simple,margin:(p.pipe.allowOpen||60)-S1,ok:S1<=(p.pipe.allowOpen||60)};}
+
+function init(){PIPE_SIZES.forEach(s=>document.getElementById('pipeSize').add(new Option(s,s)));set('inputDate',today());set('pipeSize',1350);calcPipe();renderCurves([{L:39.471,dir:'L',R:40,deg:56,min:32,sec:14}]);}
+function calcPipe(){const p=pipeDefault(+v('pipeSize',1350),v('pipeCategory','ヒューム管'));set('pipeInner',fmt(p.inner,3));set('pipeOuter',fmt(p.outer,3));set('pipeT',fmt(p.t,3));set('pipeArea',fmt(p.area,4));set('pipeWeight',fmt(p.weight,3));set('pipeLength',fmt(p.len,4));const sigma=13;set('allowForce',fmt(1000*sigma*p.area,0));jointChanged(false)}
+function jointChanged(force=true){const j=v('jointType','JC');set('allowOpen',j==='JC'?'60.0':j==='JB'?'40.0':'30.0')}
+function renderCurves(arr){document.getElementById('curves').innerHTML='';(arr||[]).forEach(c=>addCurve(c));}
+function addCurve(c={L:30,dir:'L',R:50,deg:15,min:0,sec:0}){const div=document.createElement('div');div.className='card curve';div.innerHTML=`<h2>曲線</h2><div class="grid"><div class="row"><label>IP間距離</label><input class="num cL" value="${fmt(c.L,3)}"> m</div><div class="row"><label>方向</label><select class="cDir"><option value="L">左</option><option value="R">右</option></select></div><div class="row"><label>半径 R</label><input class="num cR" value="${fmt(c.R,3)}"> m</div><div class="row"><label>IA 度</label><input class="num cDeg" value="${c.deg||0}"></div><div class="row"><label>分</label><input class="num cMin" value="${c.min||0}"></div><div class="row"><label>秒</label><input class="num cSec" value="${c.sec||0}"></div></div><button class="danger" onclick="this.closest('.curve').remove()">削除</button>`;document.getElementById('curves').appendChild(div);div.querySelector('.cDir').value=c.dir||'L';}
+function saveProject(){saveCurrentBase(true)}
+function openModule(fn){if(!saveCurrentBase(false))return;if(fn==='02_alignment_visual.html'){window.open('./'+fn,'_blank','noopener');return}showFramePage('作業ページ',fn)}
+function init(){PIPE_SIZES.forEach(s=>document.getElementById('pipeSize').add(new Option(s,s)));set('inputDate',today());set('pipeSize',1350);calcPipe();renderCurves([{L:39.471,dir:'L',R:40,deg:56,min:32,sec:14}]);const p=getProject();if(p){applyBase(p);renderCurves(p.alignment?.curves||[])}renderCurrentBase();setAppLayout()}
+
+const DRAFT_KEY='curvedJackingProjectDraft';
+let currentWizardStage='menu';
+let autoSaveTimer=null;
+function setupSaveWizard(){
+  if(document.getElementById('saveWizardStyle'))return;
+  const style=document.createElement('style');
+  style.id='saveWizardStyle';
+  style.textContent='.save-status{font-size:12px;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:8px;padding:8px 10px;margin:10px 0}.wizard-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}.wizard-step-hidden{display:none!important}body.basic-wizard-active #workMenu{display:none!important}';
+  document.head.appendChild(style);
+  const cards=[...document.querySelectorAll('#baseForm > .card')];
+  if(cards[0]){cards[0].id='siteStageCard';cards[0].dataset.stage='site';}
+  if(cards[1]){cards[1].id='soilStageCard';cards[1].dataset.stage='soil';}
+  if(cards[2]){cards[2].id='pipeStageCard';cards[2].dataset.stage='pipe';}
+  if(cards[3]){cards[3].id='alignmentStageCard';cards[3].dataset.stage='alignment';}
+  if(cards[4]){cards[4].id='finalStageCard';cards[4].dataset.stage='final';}
+  cards.forEach(c=>c.classList.add('wizard-card'));
+  addWizardControls();
+  document.querySelectorAll('#baseForm input,#baseForm select,#baseForm textarea').forEach(el=>{
+    el.addEventListener('input',scheduleDraftSave);
+    el.addEventListener('change',scheduleDraftSave);
+  });
+  window.addEventListener('beforeunload',()=>{try{saveDraftNow()}catch(e){}});
+  const p=getProject()||getDraftProject();
+  if(p){applyBase(p);renderCurves(p.alignment?.curves||[]);localStorage.setItem('curvedJackingProject',JSON.stringify(p));renderCurrentBase();showSaveStatus('ブラウザに保存済みの情報を復元しています。');}
+}
+function addWizardControls(){
+  const site=document.getElementById('siteStageCard');
+  const soil=document.getElementById('soilStageCard');
+  const pipe=document.getElementById('pipeStageCard');
+  const align=document.getElementById('alignmentStageCard');
+  if(site&&!site.querySelector('.wizard-actions')){
+    site.insertAdjacentHTML('beforeend','<div class="wizard-actions"><button class="ok" type="button" onclick="completeSiteStage()">現場名・スパン名を保存して次へ</button><button class="secondary" type="button" onclick="saveProject()">JSON保存</button></div><div id="saveStatus" class="save-status">入力内容はブラウザ内にも自動保存されます。</div>');
+  }
+  if(soil&&!soil.querySelector('.wizard-actions')){
+    soil.insertAdjacentHTML('beforeend','<div class="wizard-actions"><button class="ok" type="button" onclick="completeSoilStage()">土質条件を保存して推進管仕様へ</button><button class="secondary" type="button" onclick="showWizardStage(\'site\')">現場情報へ戻る</button></div>');
+  }
+  if(pipe&&!pipe.querySelector('.wizard-actions')){
+    pipe.insertAdjacentHTML('beforeend','<div class="wizard-actions"><button class="ok" type="button" onclick="completePipeStage()">推進管仕様を保存して測量基線へ</button><button class="secondary" type="button" onclick="showWizardStage(\'soil\')">土質条件へ戻る</button></div>');
+  }
+  if(align&&!align.querySelector('.wizard-actions')){
+    align.insertAdjacentHTML('beforeend','<div class="wizard-actions"><button class="ok" type="button" onclick="completeAlignmentStage()">測量基線を保存して作業メニューへ</button><button class="secondary" type="button" onclick="showWizardStage(\'pipe\')">推進管仕様へ戻る</button></div>');
+  }
+}
+function showSaveStatus(msg){
+  let box=document.getElementById('saveStatus');
+  if(!box){
+    const site=document.getElementById('siteStageCard');
+    if(site){site.insertAdjacentHTML('beforeend','<div id="saveStatus" class="save-status"></div>');box=document.getElementById('saveStatus');}
+  }
+  if(box)box.textContent=msg;
+}
+function getDraftProject(){try{return JSON.parse(localStorage.getItem(DRAFT_KEY)||'null')}catch(e){return null}}
+function scheduleDraftSave(){clearTimeout(autoSaveTimer);autoSaveTimer=setTimeout(saveDraftNow,250)}
+function saveDraftNow(){
+  const p=collectBase();
+  p.savedAt=new Date().toISOString();
+  localStorage.setItem(DRAFT_KEY,JSON.stringify(p));
+  if(String(p.site?.name||'').trim()&&String(p.site?.span||'').trim()){
+    localStorage.setItem('curvedJackingProject',JSON.stringify(p));
+    renderCurrentBase();
+  }
+  showSaveStatus('ブラウザ内に自動保存済み: '+new Date().toLocaleTimeString());
+  return p;
+}
+function projectFileName(p){return safeName(p.site.name)+'_'+safeName(p.site.span)+'.json'}
+function saveWithPrompt(message){
+  if(!validateRequired())return null;
+  const p=saveDraftNow();
+  if(confirm(message+'\\n\\nブラウザ内には自動保存済みです。念のためJSONファイルも保存しますか？')){
+    downloadJSON(p,projectFileName(p));
+    showSaveStatus('ブラウザ内へ保存し、JSON保存も開始しました。ダウンロード先を確認してください。');
+  }else{
+    showSaveStatus('ブラウザ内へ保存しました。あとで上部のJSON保存からファイル保存できます。');
+  }
+  return p;
+}
+function validateSiteStage(){
+  const required=[['siteName','現場名'],['spanName','スパン名'],['inputDate','入力日']];
+  for(const [id,label] of required){
+    const el=document.getElementById(id);
+    if(!String(el?.value||'').trim()){alert(label+'を入力してください。');el?.focus();return false}
+  }
+  return true;
+}
+function completeSiteStage(){
+  if(!validateSiteStage())return;
+  saveWithPrompt('現場名・スパン名を保存します。');
+  showWizardStage('soil');
+}
+function completeSoilStage(){
+  saveWithPrompt('土質条件まで保存します。');
+  showWizardStage('pipe');
+}
+function completePipeStage(){
+  saveWithPrompt('推進管仕様まで保存します。');
+  showWizardStage('alignment');
+}
+function completeAlignmentStage(){
+  saveWithPrompt('測量基線まで保存します。');
+  document.body.classList.remove('basic-wizard-active');
+  document.querySelectorAll('.wizard-card').forEach(c=>c.classList.remove('wizard-step-hidden'));
+  showWorkMenu(false);
+}
+function showWizardStage(stage){
+  currentWizardStage=stage;
+  document.body.classList.add('base-ready','base-form-visible','basic-wizard-active');
+  document.querySelectorAll('.wizard-card').forEach(c=>{
+    const show=c.dataset.stage===stage;
+    c.classList.toggle('wizard-step-hidden',!show);
+  });
+  const card=document.querySelector('.wizard-card[data-stage="'+stage+'"]');
+  card?.scrollIntoView({block:'start'});
+  const first=card?.querySelector('input,select,textarea');
+  setTimeout(()=>first?.focus?.(),0);
+}
+function startNewBase(){
+  document.body.classList.add('base-ready','base-form-visible','basic-wizard-active');
+  set('siteName','');set('spanName','');set('inputDate',today());
+  saveDraftNow();
+  showWizardStage('site');
+}
+const originalShowWorkMenu=showWorkMenu;
+showWorkMenu=function(showForm=false){
+  document.body.classList.add('base-ready');
+  document.body.classList.toggle('base-form-visible',!!showForm);
+  document.body.classList.remove('basic-wizard-active');
+  document.querySelectorAll('.wizard-card').forEach(c=>c.classList.remove('wizard-step-hidden'));
+  document.getElementById('workMenu')?.scrollIntoView({block:'start'});
+}
+const originalSaveCurrentBase=saveCurrentBase;
+saveCurrentBase=function(download=false){
+  if(!validateRequired())return null;
+  const p=saveDraftNow();
+  if(download)downloadJSON(p,projectFileName(p));
+  return p;
+}
+
+document.addEventListener('focusin',e=>{if(e.target.matches('input'))setTimeout(()=>e.target.select?.(),0);});init();setupSaveWizard();</script>
+<script>
+function openPage(file){
+  window.location.href='./'+file;
+}
+</script>
+
+
+<!-- Vr0011 basic save simple name and preserve measurements -->
+<script>
+(function(){
+  const previousCollectBase = window.collectBase;
+  window.collectBase = function(){
+    const base = previousCollectBase ? previousCollectBase.apply(this, arguments) : {};
+    try{
+      const current = JSON.parse(localStorage.getItem('curvedJackingProject') || 'null');
+      if(Array.isArray(current?.measurements)) base.measurements = current.measurements;
+    }catch(e){}
+    return base;
+  };
+  window.projectFileName = function(p){
+    return safeName(p?.site?.name || '現場名未設定') + '_' + safeName(p?.site?.span || 'スパン未設定') + '.json';
+  };
+})();
+</script>
+</body></html>
