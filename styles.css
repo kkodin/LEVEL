@@ -214,8 +214,8 @@ input:focus {
 }
 .mode-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
-  gap: 9px;
+  grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+  gap: 7px;
   margin-top: 8px;
 }
 .mode-row button.active-mode {

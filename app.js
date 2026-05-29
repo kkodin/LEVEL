@@ -48,6 +48,11 @@ function fmt(value) {
   return Number.isFinite(value) ? value.toFixed(3) : "";
 }
 
+function fmtInput(value) {
+  const parsed = num(value);
+  return parsed === null ? "" : parsed.toFixed(3);
+}
+
 function calculate() {
   let currentIH = null;
   rows = rows.map((row, index) => {
@@ -127,6 +132,21 @@ function writeSelectedValue(value) {
   saveSoon();
 }
 
+function finalizeSelectedValue() {
+  if (!rows[selected.row]) rows[selected.row] = blankRow();
+  if (selected.field === "point") {
+    commitPointName();
+    return;
+  }
+
+  const normalized = fmtInput(rows[selected.row][selected.field] || buffer);
+  rows[selected.row][selected.field] = normalized;
+  buffer = normalized;
+  if (selected.row === 0 && selected.field === "gl") $("#baseGl").value = normalized;
+  render();
+  saveSoon();
+}
+
 function commitPointName() {
   if (!rows[selected.row]) rows[selected.row] = blankRow();
   rows[selected.row].point = $("#activePoint").value;
@@ -160,6 +180,7 @@ function clearBuffer() {
 }
 
 function chooseBs() {
+  finalizeSelectedValue();
   let row = selected.row;
   if (!rows[row]) row = rows.length - 1;
   selected = { row: Math.max(0, row), field: "bs" };
@@ -168,6 +189,7 @@ function chooseBs() {
 }
 
 function chooseFs() {
+  finalizeSelectedValue();
   let row = selected.row;
   if (selected.field === "bs" || rows[row]?.fs) row += 1;
   if (!rows[row]) rows[row] = blankRow();
@@ -178,6 +200,7 @@ function chooseFs() {
 }
 
 function moveRow(delta) {
+  finalizeSelectedValue();
   const nextRow = Math.max(0, Math.min(rows.length - 1, selected.row + delta));
   selected = { row: nextRow, field: selected.field };
   if (selected.field === "gl" && nextRow > 0) selected.field = "fs";
@@ -186,12 +209,27 @@ function moveRow(delta) {
 }
 
 function moveField(delta) {
+  finalizeSelectedValue();
   const editableFields = selected.row === 0 ? ["gl", "bs", "fs", "point"] : ["bs", "fs", "point"];
   const index = editableFields.indexOf(selected.field);
   const nextIndex = Math.max(0, Math.min(editableFields.length - 1, index + delta));
   selected = { row: selected.row, field: editableFields[nextIndex] };
   buffer = rows[selected.row]?.[selected.field] || "";
   render();
+}
+
+function speakCurrentValue() {
+  finalizeSelectedValue();
+  const row = rows[selected.row] || blankRow();
+  const value = row[selected.field] || buffer || "";
+  if (!value || !("speechSynthesis" in window)) return;
+
+  const label = selected.field.toUpperCase();
+  const spokenValue = String(value).replace("-", "マイナス").replace(".", "点");
+  const utterance = new SpeechSynthesisUtterance(`${label} ${spokenValue}`);
+  utterance.lang = "ja-JP";
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utterance);
 }
 
 function bind() {
@@ -218,6 +256,7 @@ function bind() {
   });
   $("#modeBs").addEventListener("click", chooseBs);
   $("#modeFs").addEventListener("click", chooseFs);
+  $("#speakValue").addEventListener("click", speakCurrentValue);
   $("#prevRow").addEventListener("click", () => moveRow(-1));
   $("#nextRow").addEventListener("click", () => moveRow(1));
   $("#exportCsv").addEventListener("click", exportCsv);
