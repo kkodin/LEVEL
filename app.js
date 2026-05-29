@@ -49,7 +49,10 @@ function fmt(value) {
 }
 
 function fmtInput(value) {
-  const parsed = num(value);
+  let normalized = String(value ?? "").trim();
+  if (normalized.startsWith(".")) normalized = `0${normalized}`;
+  if (normalized.startsWith("-.")) normalized = normalized.replace("-.", "-0.");
+  const parsed = num(normalized);
   return parsed === null ? "" : parsed.toFixed(3);
 }
 
