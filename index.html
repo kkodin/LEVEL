@@ -9,12 +9,34 @@
   <body>
     <main class="app">
       <header class="header">
+        <button id="menuOpen" class="menu-button" type="button" aria-label="メニュー">☰</button>
         <div>
           <p>LEVEL SURVEY</p>
           <h1>レベル野帳</h1>
         </div>
         <button id="exportCsv" type="button">CSV</button>
       </header>
+
+      <aside id="drawer" class="drawer" aria-label="測点台帳">
+        <div class="drawer-head">
+          <div>
+            <p>POINT LIST</p>
+            <h2>測点台帳</h2>
+          </div>
+          <button id="menuClose" type="button" aria-label="閉じる">×</button>
+        </div>
+        <label>
+          <span>測点名</span>
+          <input id="savedPointName" type="text" placeholder="KBM1">
+        </label>
+        <label>
+          <span>数値</span>
+          <input id="savedPointValue" type="text" inputmode="none" placeholder="10.830" readonly>
+        </label>
+        <button id="savePoint" type="button">台帳に保存</button>
+        <div id="pointList" class="point-list"></div>
+      </aside>
+      <div id="drawerBackdrop" class="drawer-backdrop"></div>
 
       <section class="base-bar" aria-label="基準高入力">
         <label>
@@ -72,7 +94,6 @@
         <div class="mode-row">
           <button id="modeBs" type="button">BS</button>
           <button id="modeFs" type="button">FS</button>
-          <button id="speakValue" type="button">読上</button>
           <button id="prevRow" type="button">↑</button>
           <button id="nextRow" type="button">↓</button>
         </div>

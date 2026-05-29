@@ -2,9 +2,7 @@
   --ink: #17201c;
   --muted: #557067;
   --line: #202820;
-  --grid: #d6ddc9;
   --paper: #ffffff;
-  --soft: #f1f6f0;
   --input: #fffbc4;
   --accent: #07866f;
   --active: #e21d2f;
@@ -21,8 +19,8 @@ body {
   color: var(--ink);
   background: #eef4ef;
   font-family: "Yu Gothic UI", "Hiragino Kaku Gothic ProN", Meiryo, system-ui, sans-serif;
-  touch-action: manipulation;
   overscroll-behavior: contain;
+  touch-action: manipulation;
 }
 button, input { font: inherit; }
 button {
@@ -36,6 +34,21 @@ button {
   -webkit-user-select: none;
   user-select: none;
 }
+input {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid #cfd8ce;
+  border-radius: 5px;
+  padding: 5px 7px;
+  background: #fff;
+  outline: none;
+  font-size: 16px;
+  touch-action: manipulation;
+}
+input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(7, 134, 111, 0.18);
+}
 .app {
   width: min(420px, 100%);
   min-height: 100vh;
@@ -44,26 +57,31 @@ button {
   background: #eef4ef;
 }
 .header {
-  display: flex;
+  display: grid;
+  grid-template-columns: 42px 1fr 70px;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   margin-bottom: 10px;
 }
-.header p {
+.header p,
+.drawer-head p {
   margin: 0 0 2px;
   color: var(--accent);
   font-size: 10px;
   font-weight: 800;
 }
-.header h1 {
+.header h1,
+.drawer-head h2 {
   margin: 0;
-  font-size: 25px;
   line-height: 1.15;
 }
-.header button {
-  width: 70px;
-  height: 48px;
+.header h1 { font-size: 25px; }
+.drawer-head h2 { font-size: 22px; }
+.header button { height: 48px; }
+.menu-button {
+  width: 42px;
+  padding: 0;
+  font-size: 24px;
 }
 .base-bar {
   display: grid;
@@ -84,21 +102,6 @@ label span {
   font-size: 11px;
   font-weight: 800;
 }
-input {
-  width: 100%;
-  min-height: 34px;
-  border: 1px solid #cfd8ce;
-  border-radius: 5px;
-  padding: 5px 7px;
-  background: #fff;
-  outline: none;
-  font-size: 16px;
-  touch-action: manipulation;
-}
-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(7, 134, 111, 0.18);
-}
 .table-wrap {
   max-height: 184px;
   overflow: auto;
@@ -111,7 +114,8 @@ input:focus {
   table-layout: fixed;
   font-size: 12px;
 }
-.level-table th, .level-table td {
+.level-table th,
+.level-table td {
   height: 20px;
   border: 1px solid var(--line);
   padding: 1px 3px;
@@ -138,14 +142,12 @@ input:focus {
   outline: 4px solid var(--active);
   outline-offset: -4px;
 }
+.level-table td.computed { color: #063f36; }
 .level-table,
 .level-table td,
 .entry-panel,
 .keypad,
-.mode-row {
-  touch-action: manipulation;
-}
-.level-table td.computed { color: #063f36; }
+.mode-row { touch-action: manipulation; }
 .entry-panel {
   position: fixed;
   left: 50%;
@@ -174,7 +176,6 @@ input:focus {
   min-height: 44px;
   color: #000;
   font-size: 16px;
-  font-weight: 400;
 }
 .entry-readout input {
   min-height: 44px;
@@ -196,7 +197,8 @@ input:focus {
   grid-template-columns: repeat(4, 1fr);
   gap: 7px;
 }
-.keypad button, .mode-row button {
+.keypad button,
+.mode-row button {
   min-height: 48px;
   padding: 0;
   font-size: 18px;
@@ -210,12 +212,11 @@ input:focus {
   border-color: var(--accent);
   background: var(--accent);
   color: #fff;
-  font-size: 18px;
 }
 .mode-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
-  gap: 7px;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 9px;
   margin-top: 8px;
 }
 .mode-row button.active-mode {
@@ -226,6 +227,70 @@ input:focus {
   margin-top: 8px;
   color: var(--muted);
   font-size: 12px;
+}
+.drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 30;
+  width: min(320px, 86vw);
+  height: 100vh;
+  padding: calc(14px + env(safe-area-inset-top)) 14px 14px;
+  background: #fff;
+  box-shadow: 14px 0 34px rgba(0, 0, 0, 0.18);
+  transform: translateX(-105%);
+  transition: transform 160ms ease;
+}
+.drawer.open { transform: translateX(0); }
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: none;
+  background: rgba(0, 0, 0, 0.26);
+}
+.drawer-backdrop.open { display: block; }
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.drawer-head button {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  font-size: 24px;
+}
+#savePoint {
+  width: 100%;
+  min-height: 44px;
+  margin: 10px 0;
+}
+.point-list {
+  display: grid;
+  gap: 7px;
+  max-height: calc(100vh - 250px);
+  overflow: auto;
+}
+.point-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  min-height: 48px;
+  padding: 6px 8px;
+  border: 1px solid #cfd8ce;
+  border-radius: 6px;
+  background: #f8fbf8;
+  color: var(--ink);
+  text-align: left;
+}
+.point-item strong,
+.point-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 @media (min-width: 720px) {
   .app {

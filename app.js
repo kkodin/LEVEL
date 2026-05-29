@@ -1,6 +1,8 @@
 const STORAGE_KEY = "levelBook.image2.v1";
+const POINTS_KEY = "levelBook.savedPoints.v1";
 
 let rows = [];
+let savedPoints = [];
 let selected = { row: 0, field: "gl" };
 let buffer = "";
 let saveTimer = 0;
@@ -13,11 +15,8 @@ function blankRow(seed = {}) {
 }
 
 function load() {
-  try {
-    rows = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-  } catch {
-    rows = [];
-  }
+  rows = readJson(STORAGE_KEY, []);
+  savedPoints = readJson(POINTS_KEY, []);
   if (!rows.length) {
     rows = [
       blankRow({ bs: "1.058", gl: "10.830", point: "KBM1" }),
@@ -29,11 +28,20 @@ function load() {
   $("#baseGl").value = rows[0]?.gl || "";
 }
 
+function readJson(key, fallback) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback));
+  } catch {
+    return fallback;
+  }
+}
+
 function saveSoon() {
   $("#saveState").textContent = "保存中...";
   clearTimeout(saveTimer);
   saveTimer = window.setTimeout(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
+    localStorage.setItem(POINTS_KEY, JSON.stringify(savedPoints));
     $("#saveState").textContent = "保存済み";
   }, 120);
 }
@@ -67,9 +75,7 @@ function calculate() {
       gl = currentIH !== null && fs !== null ? currentIH - fs : null;
       next.gl = fmt(gl);
     }
-    if (gl !== null && bs !== null) {
-      currentIH = gl + bs;
-    }
+    if (gl !== null && bs !== null) currentIH = gl + bs;
     next.ih = fmt(currentIH);
     return next;
   });
@@ -106,6 +112,7 @@ function render() {
   }
   updateReadout();
   updateModes();
+  renderPointList();
 }
 
 function selectCell(row, field) {
@@ -120,6 +127,8 @@ function updateReadout() {
   $("#activeType").textContent = selected.field.toUpperCase();
   $("#activePoint").value = row.point || "";
   $("#activeValue").textContent = buffer || row[selected.field] || "-";
+  $("#savedPointName").value = row.point || "";
+  $("#savedPointValue").value = selected.field === "point" ? "" : (row[selected.field] || buffer || "");
 }
 
 function updateModes() {
@@ -141,7 +150,6 @@ function finalizeSelectedValue() {
     commitPointName();
     return;
   }
-
   const normalized = fmtInput(rows[selected.row][selected.field] || buffer);
   rows[selected.row][selected.field] = normalized;
   buffer = normalized;
@@ -161,6 +169,7 @@ function commitPointName() {
 function appendKey(key) {
   if (selected.field === "point") return;
   if (key === "." && buffer.includes(".")) return;
+  speakKey(key);
   buffer = buffer === "0" ? key : `${buffer}${key}`;
   writeSelectedValue(buffer);
 }
@@ -221,24 +230,89 @@ function moveField(delta) {
   render();
 }
 
-function speakCurrentValue() {
-  finalizeSelectedValue();
-  const row = rows[selected.row] || blankRow();
-  const value = row[selected.field] || buffer || "";
-  if (!value || !("speechSynthesis" in window)) return;
-
-  const label = selected.field.toUpperCase();
-  const spokenValue = String(value).replace("-", "マイナス").replace(".", "点");
-  const utterance = new SpeechSynthesisUtterance(`${label} ${spokenValue}`);
+function speakKey(key) {
+  if (!("speechSynthesis" in window)) return;
+  const text = key === "." ? "点" : key;
+  const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "ja-JP";
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(utterance);
 }
 
+function openDrawer() {
+  $("#drawer").classList.add("open");
+  $("#drawerBackdrop").classList.add("open");
+}
+
+function closeDrawer() {
+  $("#drawer").classList.remove("open");
+  $("#drawerBackdrop").classList.remove("open");
+}
+
+function saveCurrentPoint() {
+  finalizeSelectedValue();
+  const name = $("#savedPointName").value.trim() || rows[selected.row]?.point || "";
+  const value = fmtInput($("#savedPointValue").value || rows[selected.row]?.[selected.field] || buffer);
+  if (!name || !value) return;
+  const existing = savedPoints.find((point) => point.name === name);
+  if (existing) {
+    existing.value = value;
+  } else {
+    savedPoints.push({ name, value });
+  }
+  renderPointList();
+  saveSoon();
+}
+
+function recallPoint(point) {
+  if (!rows[selected.row]) rows[selected.row] = blankRow();
+  rows[selected.row].point = point.name;
+  if (selected.field !== "point") {
+    rows[selected.row][selected.field] = point.value;
+    buffer = point.value;
+    if (selected.row === 0 && selected.field === "gl") $("#baseGl").value = point.value;
+  }
+  if (selected.row === 0) $("#basePoint").value = point.name;
+  closeDrawer();
+  render();
+  saveSoon();
+}
+
+function renderPointList() {
+  const list = $("#pointList");
+  if (!list) return;
+  list.innerHTML = "";
+  savedPoints.forEach((point) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "point-item";
+    button.innerHTML = `<strong>${escapeHtml(point.name)}</strong><span>${escapeHtml(point.value)}</span>`;
+    button.addEventListener("click", () => recallPoint(point));
+    list.appendChild(button);
+  });
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;"
+  })[char]);
+}
+
 function bind() {
   document.addEventListener("gesturestart", (event) => event.preventDefault());
   document.addEventListener("dblclick", (event) => event.preventDefault(), { passive: false });
-
+  $("#menuOpen").addEventListener("click", openDrawer);
+  $("#menuClose").addEventListener("click", closeDrawer);
+  $("#drawerBackdrop").addEventListener("click", closeDrawer);
+  $("#savePoint").addEventListener("click", saveCurrentPoint);
+  $("#savedPointValue").addEventListener("click", () => {
+    const value = rows[selected.row]?.[selected.field] || buffer || "";
+    $("#savedPointValue").value = value;
+  });
   $("#basePoint").addEventListener("input", () => {
     rows[0].point = $("#basePoint").value;
     render();
@@ -259,7 +333,6 @@ function bind() {
   });
   $("#modeBs").addEventListener("click", chooseBs);
   $("#modeFs").addEventListener("click", chooseFs);
-  $("#speakValue").addEventListener("click", speakCurrentValue);
   $("#prevRow").addEventListener("click", () => moveRow(-1));
   $("#nextRow").addEventListener("click", () => moveRow(1));
   $("#exportCsv").addEventListener("click", exportCsv);
