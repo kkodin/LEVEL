@@ -1,0 +1,262 @@
+const STORAGE_KEY = "levelBook.image2.v1";
+
+let rows = [];
+let selected = { row: 0, field: "gl" };
+let buffer = "";
+let saveTimer = 0;
+
+const $ = (selector) => document.querySelector(selector);
+const fields = ["bs", "ih", "fs", "gl", "point"];
+
+function blankRow(seed = {}) {
+  return { bs: "", ih: "", fs: "", gl: "", point: "", ...seed };
+}
+
+function load() {
+  try {
+    rows = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+  } catch {
+    rows = [];
+  }
+  if (!rows.length) {
+    rows = [
+      blankRow({ bs: "1.058", gl: "10.830", point: "KBM1" }),
+      blankRow({ bs: "0.883", fs: "3.481", point: "カルバート上流部" }),
+      blankRow({ fs: "0.967", point: "カルバート接続部" })
+    ];
+  }
+  $("#basePoint").value = rows[0]?.point || "KBM1";
+  $("#baseGl").value = rows[0]?.gl || "";
+}
+
+function saveSoon() {
+  $("#saveState").textContent = "保存中...";
+  clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
+    $("#saveState").textContent = "保存済み";
+  }, 120);
+}
+
+function num(value) {
+  if (value === "" || value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function fmt(value) {
+  return Number.isFinite(value) ? value.toFixed(3) : "";
+}
+
+function calculate() {
+  let currentIH = null;
+  rows = rows.map((row, index) => {
+    const next = { ...row };
+    const bs = num(next.bs);
+    const fs = num(next.fs);
+    let gl = num(next.gl);
+    if (index > 0) {
+      gl = currentIH !== null && fs !== null ? currentIH - fs : null;
+      next.gl = fmt(gl);
+    }
+    if (gl !== null && bs !== null) {
+      currentIH = gl + bs;
+    }
+    next.ih = fmt(currentIH);
+    return next;
+  });
+}
+
+function render() {
+  calculate();
+  const tbody = $("#rows");
+  tbody.innerHTML = "";
+  rows.forEach((row, rowIndex) => {
+    const tr = document.createElement("tr");
+    fields.forEach((field) => {
+      const td = document.createElement("td");
+      td.className = field;
+      td.textContent = row[field] || "";
+      td.dataset.row = String(rowIndex);
+      td.dataset.field = field;
+      if (field === "ih" || (field === "gl" && rowIndex > 0)) td.classList.add("computed");
+      if (selected.row === rowIndex && selected.field === field) td.classList.add("selected");
+      td.addEventListener("click", () => selectCell(rowIndex, field));
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  for (let i = rows.length; i < 8; i += 1) {
+    const tr = document.createElement("tr");
+    fields.forEach((field) => {
+      const td = document.createElement("td");
+      td.className = field;
+      td.innerHTML = "&nbsp;";
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  }
+  updateReadout();
+  updateModes();
+}
+
+function selectCell(row, field) {
+  if (field === "ih" || (field === "gl" && row > 0)) return;
+  selected = { row, field };
+  buffer = rows[row]?.[field] || "";
+  render();
+}
+
+function updateReadout() {
+  const row = rows[selected.row] || blankRow();
+  $("#activeType").textContent = selected.field.toUpperCase();
+  $("#activePoint").value = row.point || "";
+  $("#activeValue").textContent = buffer || row[selected.field] || "-";
+}
+
+function updateModes() {
+  $("#modeBs").classList.toggle("active-mode", selected.field === "bs");
+  $("#modeFs").classList.toggle("active-mode", selected.field === "fs");
+}
+
+function writeSelectedValue(value) {
+  if (!rows[selected.row]) rows[selected.row] = blankRow();
+  rows[selected.row][selected.field] = value;
+  if (selected.row === 0 && selected.field === "gl") $("#baseGl").value = value;
+  render();
+  saveSoon();
+}
+
+function commitPointName() {
+  if (!rows[selected.row]) rows[selected.row] = blankRow();
+  rows[selected.row].point = $("#activePoint").value;
+  if (selected.row === 0) $("#basePoint").value = rows[0].point;
+  render();
+  saveSoon();
+}
+
+function appendKey(key) {
+  if (selected.field === "point") return;
+  if (key === "." && buffer.includes(".")) return;
+  buffer = buffer === "0" ? key : `${buffer}${key}`;
+  writeSelectedValue(buffer);
+}
+
+function toggleSign() {
+  if (selected.field === "point") return;
+  if (!buffer) buffer = rows[selected.row]?.[selected.field] || "0";
+  buffer = buffer.startsWith("-") ? buffer.slice(1) : `-${buffer}`;
+  writeSelectedValue(buffer);
+}
+
+function backspace() {
+  buffer = buffer.slice(0, -1);
+  writeSelectedValue(buffer);
+}
+
+function clearBuffer() {
+  buffer = "";
+  writeSelectedValue(buffer);
+}
+
+function chooseBs() {
+  let row = selected.row;
+  if (!rows[row]) row = rows.length - 1;
+  selected = { row: Math.max(0, row), field: "bs" };
+  buffer = rows[selected.row]?.bs || "";
+  render();
+}
+
+function chooseFs() {
+  let row = selected.row;
+  if (selected.field === "bs" || rows[row]?.fs) row += 1;
+  if (!rows[row]) rows[row] = blankRow();
+  selected = { row, field: "fs" };
+  buffer = rows[row].fs || "";
+  render();
+  saveSoon();
+}
+
+function moveRow(delta) {
+  const nextRow = Math.max(0, Math.min(rows.length - 1, selected.row + delta));
+  selected = { row: nextRow, field: selected.field };
+  if (selected.field === "gl" && nextRow > 0) selected.field = "fs";
+  buffer = rows[selected.row]?.[selected.field] || "";
+  render();
+}
+
+function moveField(delta) {
+  const editableFields = selected.row === 0 ? ["gl", "bs", "fs", "point"] : ["bs", "fs", "point"];
+  const index = editableFields.indexOf(selected.field);
+  const nextIndex = Math.max(0, Math.min(editableFields.length - 1, index + delta));
+  selected = { row: selected.row, field: editableFields[nextIndex] };
+  buffer = rows[selected.row]?.[selected.field] || "";
+  render();
+}
+
+function bind() {
+  document.addEventListener("gesturestart", (event) => event.preventDefault());
+  document.addEventListener("dblclick", (event) => event.preventDefault(), { passive: false });
+
+  $("#basePoint").addEventListener("input", () => {
+    rows[0].point = $("#basePoint").value;
+    render();
+    saveSoon();
+  });
+  $("#baseGl").addEventListener("click", () => {
+    selected = { row: 0, field: "gl" };
+    buffer = rows[0]?.gl || "";
+    render();
+  });
+  $("#activePoint").addEventListener("input", commitPointName);
+  $("#resetBook").addEventListener("click", () => {
+    rows = [blankRow({ point: $("#basePoint").value || "KBM1", gl: $("#baseGl").value || "" })];
+    selected = { row: 0, field: "gl" };
+    buffer = rows[0].gl;
+    render();
+    saveSoon();
+  });
+  $("#modeBs").addEventListener("click", chooseBs);
+  $("#modeFs").addEventListener("click", chooseFs);
+  $("#prevRow").addEventListener("click", () => moveRow(-1));
+  $("#nextRow").addEventListener("click", () => moveRow(1));
+  $("#exportCsv").addEventListener("click", exportCsv);
+  document.querySelector(".keypad").addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    if (button.dataset.key) appendKey(button.dataset.key);
+    if (button.dataset.action === "sign") toggleSign();
+    if (button.dataset.action === "back") backspace();
+    if (button.dataset.action === "clear") clearBuffer();
+    if (button.dataset.action === "left") moveField(-1);
+    if (button.dataset.action === "right") moveField(1);
+  });
+}
+
+function exportCsv() {
+  calculate();
+  const header = ["BS", "IH", "FS", "GL", "測点名"];
+  const body = rows.map((row) => [row.bs, row.ih, row.fs, row.gl, row.point]);
+  const csv = [header, ...body].map((line) => line.map(csvCell).join(",")).join("\n");
+  download("level-book.csv", `\ufeff${csv}`, "text/csv;charset=utf-8");
+}
+
+function csvCell(value) {
+  return `"${String(value ?? "").replaceAll('"', '""')}"`;
+}
+
+function download(filename, content, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+load();
+bind();
+buffer = rows[0]?.gl || "";
+render();
+saveSoon();
