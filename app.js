@@ -492,11 +492,11 @@ function exportCsv() {
 function csvRow(row, index) {
   const excelRow = index + 2;
   const prevExcelRow = excelRow - 1;
-  const ihFormula = `=IF(AND(D${excelRow}<>"",A${excelRow}<>""),D${excelRow}+A${excelRow},"")`;
+  const ihValue = row.bs ? `=D${excelRow}+A${excelRow}` : "";
   const glValue = index > 0 && row.fs
-    ? `=IF(AND(B${prevExcelRow}<>"",C${excelRow}<>""),B${prevExcelRow}-C${excelRow},"")`
+    ? `=B${prevExcelRow}-C${excelRow}`
     : row.gl;
-  return [row.bs, ihFormula, row.fs, glValue, row.point];
+  return [row.bs, ihValue, row.fs, glValue, row.point];
 }
 
 function csvCell(value) {
