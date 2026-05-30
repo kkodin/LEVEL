@@ -197,8 +197,11 @@ function backspace() {
 }
 
 function clearBuffer() {
-  buffer = "";
-  writeSelectedValue(buffer);
+  if (!window.confirm("BS FSの数値を消去してよいですか?")) return;
+  rows = rows.map((row) => blankRow({ ...row, bs: "", fs: "" }));
+  if (selected.field === "bs" || selected.field === "fs") buffer = "";
+  render();
+  saveSoon();
 }
 
 function chooseBs() {
