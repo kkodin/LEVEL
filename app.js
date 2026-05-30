@@ -6,6 +6,9 @@ let savedPoints = [];
 let selected = { row: 0, field: "gl" };
 let buffer = "";
 let saveTimer = 0;
+let drawerMode = "normal";
+let drawerTargetRow = null;
+let drawerSaved = false;
 
 const $ = (selector) => document.querySelector(selector);
 const fields = ["bs", "ih", "fs", "gl", "point"];
@@ -71,10 +74,11 @@ function calculate() {
     const bs = num(next.bs);
     const fs = num(next.fs);
     let gl = num(next.gl);
-    if (index > 0) {
+    if (index > 0 && fs !== null) {
       gl = currentIH !== null && fs !== null ? currentIH - fs : null;
       next.gl = fmt(gl);
     }
+    if (index > 0 && fs === null) currentIH = null;
     if (gl !== null && bs !== null) currentIH = gl + bs;
     next.ih = fmt(currentIH);
     return next;
@@ -118,6 +122,13 @@ function render() {
 
 function selectCell(row, field) {
   if (field === "ih" || (field === "gl" && row > 0)) return;
+  if (field === "point") {
+    selected = { row, field };
+    buffer = rows[row]?.point || "";
+    render();
+    openPointDrawer(row);
+    return;
+  }
   selected = { row, field };
   buffer = rows[row]?.[field] || "";
   render();
@@ -238,16 +249,43 @@ function speakKey(key) {
   window.speechSynthesis.speak(utterance);
 }
 
-function openDrawer() {
+function openDrawer(mode = "normal", row = null) {
+  drawerMode = mode;
+  drawerTargetRow = row;
+  drawerSaved = false;
   clearPointEntry();
+  if (drawerMode === "register" && rows[row]) {
+    $("#savedPointValue").value = fmtInput(rows[row].gl || "");
+    window.setTimeout(() => $("#savedPointName").focus(), 0);
+  }
   renderMeasuredPointSelect();
   $("#drawer").classList.add("open");
   $("#drawerBackdrop").classList.add("open");
 }
 
 function closeDrawer() {
+  applyDrawerPointName();
   $("#drawer").classList.remove("open");
   $("#drawerBackdrop").classList.remove("open");
+  drawerMode = "normal";
+  drawerTargetRow = null;
+  drawerSaved = false;
+}
+
+function openPointDrawer(row) {
+  if (!rows[row]) rows[row] = blankRow();
+  openDrawer(rows[row].fs ? "register" : "recall", row);
+}
+
+function applyDrawerPointName() {
+  if (drawerMode !== "register" || drawerTargetRow === null || drawerSaved) return;
+  const name = $("#savedPointName").value.trim();
+  if (!name) return;
+  rows[drawerTargetRow].point = name;
+  selected = { row: drawerTargetRow, field: "point" };
+  buffer = name;
+  render();
+  saveSoon();
 }
 
 function saveCurrentPoint() {
@@ -260,16 +298,27 @@ function saveCurrentPoint() {
   } else {
     savedPoints.push({ name, value });
   }
+  if (drawerMode === "register" && drawerTargetRow !== null && rows[drawerTargetRow]) {
+    rows[drawerTargetRow].point = name;
+    selected = { row: drawerTargetRow, field: "point" };
+    buffer = name;
+    drawerSaved = true;
+  }
   clearPointEntry();
   renderPointList();
+  render();
   saveSoon();
 }
 
 function recallPoint(point) {
-  rows[0] = blankRow({ ...rows[0], point: point.name, gl: point.value });
-  $("#basePoint").value = point.name;
-  $("#baseGl").value = point.value;
-  selected = { row: 0, field: "gl" };
+  const row = drawerMode === "recall" && drawerTargetRow !== null ? drawerTargetRow : 0;
+  if (!rows[row]) rows[row] = blankRow();
+  rows[row] = blankRow({ ...rows[row], point: point.name, gl: point.value });
+  if (row === 0) {
+    $("#basePoint").value = point.name;
+    $("#baseGl").value = point.value;
+  }
+  selected = { row, field: "gl" };
   buffer = point.value;
   closeDrawer();
   render();
@@ -432,13 +481,24 @@ function bind() {
 function exportCsv() {
   calculate();
   const header = ["BS", "IH", "FS", "GL", "測点名"];
-  const body = rows.map((row) => [row.bs, row.ih, row.fs, row.gl, row.point]);
+  const body = rows.map((row, index) => csvRow(row, index));
   const csv = [header, ...body].map((line) => line.map(csvCell).join(",")).join("\n");
   download("level-book.csv", `\ufeff${csv}`, "text/csv;charset=utf-8");
 }
 
+function csvRow(row, index) {
+  const excelRow = index + 2;
+  const prevExcelRow = excelRow - 1;
+  const ihFormula = `=IF(AND(D${excelRow}<>"",A${excelRow}<>""),D${excelRow}+A${excelRow},"")`;
+  const glValue = index > 0 && row.fs
+    ? `=IF(AND(B${prevExcelRow}<>"",C${excelRow}<>""),B${prevExcelRow}-C${excelRow},"")`
+    : row.gl;
+  return [row.bs, ihFormula, row.fs, glValue, row.point];
+}
+
 function csvCell(value) {
-  return `"${String(value ?? "").replaceAll('"', '""')}"`;
+  const text = String(value ?? "").replaceAll('"', '""');
+  return text.startsWith("=") ? text : `"${text}"`;
 }
 
 function download(filename, content, type) {
