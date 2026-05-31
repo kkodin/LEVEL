@@ -11,6 +11,8 @@ let saveTimer = 0;
 let drawerMode = "normal";
 let drawerTargetRow = null;
 let drawerSaved = false;
+let startupImport = false;
+let setupComplete = false;
 
 const $ = (selector) => document.querySelector(selector);
 const fields = ["bs", "ih", "fs", "gl", "point"];
@@ -20,12 +22,9 @@ function blankRow(seed = {}) {
 }
 
 function load() {
-  rows = readJson(STORAGE_KEY, []);
+  rows = [blankRow()];
   savedPoints = [];
   meta = { title: "", date: todayString(), site: "", place: "" };
-  if (!rows.length) {
-    rows = [blankRow()];
-  }
   $("#basePoint").value = rows[0]?.point || "";
   $("#baseGl").value = rows[0]?.gl || "";
   syncMetaToInputs();
@@ -304,9 +303,10 @@ function openDrawer(mode = "normal", row = null) {
   drawerTargetRow = row;
   drawerSaved = false;
   clearPointEntry();
-  $("#drawer").classList.toggle("context-mode", drawerMode !== "normal");
+  $("#drawer").classList.toggle("context-mode", drawerMode !== "normal" && drawerMode !== "setup");
+  $("#drawer").classList.toggle("setup-mode", drawerMode === "setup");
   $("#savedPointName").setAttribute("list", "pointSuggestions");
-  if ((drawerMode === "base" || drawerMode === "register") && rows[row]) {
+  if ((drawerMode === "base" || drawerMode === "register" || drawerMode === "setup") && rows[row]) {
     $("#savedPointName").value = drawerMode === "base" ? rows[row].point || "" : "";
     $("#savedPointValue").value = fmtInput(rows[row].gl || "");
   }
@@ -319,10 +319,15 @@ function openDrawer(mode = "normal", row = null) {
 }
 
 function closeDrawer() {
+  if (drawerMode === "setup" && !setupComplete) {
+    window.alert("測定情報と基準点を登録してください。");
+    return;
+  }
   applyBaseEntry();
   applyDrawerPointName();
   $("#drawer").classList.remove("open");
   $("#drawer").classList.remove("context-mode");
+  $("#drawer").classList.remove("setup-mode");
   $("#drawerBackdrop").classList.remove("open");
   drawerMode = "normal";
   drawerTargetRow = null;
@@ -362,6 +367,8 @@ function saveCurrentPoint() {
   const name = $("#savedPointName").value.trim();
   const value = fmtInput($("#savedPointValue").value);
   if (!name || !value) return;
+  readMetaFromInputs();
+  const wasSetup = drawerMode === "setup";
   const shouldCloseAfterSave = drawerMode !== "normal";
   const existing = savedPoints.find((point) => point.name === name);
   if (existing) {
@@ -376,6 +383,14 @@ function saveCurrentPoint() {
     drawerSaved = true;
     if (drawerTargetRow === 0) syncBaseInputs();
   }
+  if (drawerMode === "setup") {
+    rows = [blankRow({ point: name, gl: value })];
+    selected = { row: 0, field: "bs" };
+    buffer = "";
+    drawerSaved = true;
+    setupComplete = true;
+    syncBaseInputs();
+  }
   if (drawerMode === "register" && drawerTargetRow !== null && rows[drawerTargetRow]) {
     rows[drawerTargetRow].point = name;
     selected = { row: drawerTargetRow, field: "point" };
@@ -387,6 +402,7 @@ function saveCurrentPoint() {
   render();
   saveSoon();
   if (shouldCloseAfterSave) closeDrawer();
+  if (wasSetup) selectFirstBs();
 }
 
 function recallPoint(point) {
@@ -461,7 +477,9 @@ function clearPointEntry() {
 function updateSavePointButton() {
   const name = $("#savedPointName")?.value.trim();
   const value = fmtInput($("#savedPointValue")?.value || "");
-  $("#savePoint").disabled = !name || !value;
+  const needsMeta = drawerMode === "setup";
+  const hasMeta = $("#surveyDate").value && $("#siteName").value.trim() && $("#surveyPlace").value.trim();
+  $("#savePoint").disabled = !name || !value || (needsMeta && !hasMeta);
 }
 
 function handleSavedPointNameInput() {
@@ -471,6 +489,13 @@ function handleSavedPointNameInput() {
     $("#savedPointValue").value = value || "";
   }
   updateSavePointButton();
+}
+
+function selectFirstBs() {
+  if (!rows[0]) rows[0] = blankRow();
+  selected = { row: 0, field: "bs" };
+  buffer = rows[0].bs || "";
+  render();
 }
 
 function deleteSavedPoint(index) {
@@ -538,6 +563,11 @@ function bind() {
   document.addEventListener("gesturestart", (event) => event.preventDefault());
   document.addEventListener("dblclick", (event) => event.preventDefault(), { passive: false });
   $("#edgeOpen").addEventListener("click", () => openDrawer("normal"));
+  $("#startupImport").addEventListener("click", () => {
+    startupImport = true;
+    $("#csvFile").click();
+  });
+  $("#startupNew").addEventListener("click", startNewSite);
   $("#menuClose").addEventListener("click", closeDrawer);
   $("#drawerBackdrop").addEventListener("click", closeDrawer);
   $("#savePoint").addEventListener("click", saveCurrentPoint);
@@ -554,6 +584,7 @@ function bind() {
     $(`#${id}`).addEventListener("input", () => {
       readMetaFromInputs();
       updateSurveySummary();
+      updateSavePointButton();
       saveSoon();
     });
   });
@@ -603,6 +634,22 @@ function bindDrawerSwipe() {
   $("#drawer").addEventListener("pointercancel", () => {
     swiping = false;
   });
+}
+
+function startNewSite() {
+  $("#startupChoice").classList.add("hidden");
+  setupComplete = false;
+  startupImport = false;
+  rows = [blankRow()];
+  savedPoints = [];
+  meta = { title: "", date: todayString(), site: "", place: "" };
+  selected = { row: 0, field: "gl" };
+  buffer = "";
+  syncMetaToInputs();
+  syncBaseInputs();
+  render();
+  openDrawer("setup", 0);
+  saveSoon();
 }
 
 function exportCsv() {
@@ -657,11 +704,13 @@ function importCsv(event) {
   const file = event.target.files?.[0];
   event.target.value = "";
   if (!file) return;
-  if (!window.confirm("現在の内容を破棄してCSVを読み込みますか?")) return;
+  if (!startupImport && !window.confirm("現在の内容を破棄してCSVを読み込みますか?")) return;
   const reader = new FileReader();
   reader.addEventListener("load", () => {
     const table = parseCsv(String(reader.result || ""));
     applyImportedCsv(table, file.name);
+    $("#startupChoice").classList.add("hidden");
+    startupImport = false;
   });
   reader.readAsText(file, "utf-8");
 }
@@ -706,6 +755,7 @@ function applyImportedCsv(table, filename) {
   meta = nextMeta;
   selected = { row: 0, field: "gl" };
   buffer = rows[0]?.gl || "";
+  setupComplete = true;
   syncMetaToInputs();
   syncBaseInputs();
   render();

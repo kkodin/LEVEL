@@ -91,6 +91,27 @@ input:focus {
   color: transparent;
   font-size: 0;
 }
+.startup-choice {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(238, 244, 239, 0.96);
+}
+.startup-choice.hidden {
+  display: none;
+}
+.startup-panel {
+  display: grid;
+  gap: 14px;
+  width: min(300px, 100%);
+}
+.startup-panel button {
+  min-height: 58px;
+  font-size: 17px;
+}
 .survey-summary {
   display: grid;
   gap: 2px;
@@ -284,6 +305,11 @@ label span {
 .drawer.context-mode .drawer-actions,
 .drawer.context-mode .meta-bar,
 .drawer.context-mode .point-list {
+  opacity: 0.45;
+  pointer-events: none;
+}
+.drawer.setup-mode .drawer-actions,
+.drawer.setup-mode .point-list {
   opacity: 0.45;
   pointer-events: none;
 }
