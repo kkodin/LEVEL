@@ -42,19 +42,25 @@
       </aside>
       <div id="drawerBackdrop" class="drawer-backdrop"></div>
 
-      <section class="meta-bar" aria-label="測定情報">
-        <label>
-          <span>測定日</span>
-          <input id="surveyDate" type="date">
-        </label>
-        <label>
-          <span>現場名</span>
-          <input id="siteName" type="text">
-        </label>
-        <label>
-          <span>測定箇所</span>
-          <input id="surveyPlace" type="text">
-        </label>
+      <section id="metaBar" class="meta-bar" aria-label="測定情報">
+        <button id="metaToggle" class="meta-toggle" type="button" aria-expanded="true">
+          <span>測定情報</span>
+          <strong id="metaSummary">未入力</strong>
+        </button>
+        <div id="metaFields" class="meta-fields">
+          <label>
+            <span>測定日</span>
+            <input id="surveyDate" type="date">
+          </label>
+          <label>
+            <span>現場名</span>
+            <input id="siteName" type="text">
+          </label>
+          <label>
+            <span>測定箇所</span>
+            <input id="surveyPlace" type="text">
+          </label>
+        </div>
       </section>
 
       <section class="base-bar" aria-label="基準高入力">

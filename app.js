@@ -269,6 +269,8 @@ function syncMetaToInputs() {
   $("#siteName").value = meta.site || "";
   $("#surveyPlace").value = meta.place || "";
   updateBookTitle();
+  setMetaCollapsed(hasMetaInput());
+  updateMetaSummary();
 }
 
 function readMetaFromInputs() {
@@ -279,6 +281,20 @@ function readMetaFromInputs() {
 
 function updateBookTitle() {
   $("#bookTitle").textContent = meta.title || "レベル野帳";
+}
+
+function hasMetaInput() {
+  return Boolean(meta.date || meta.site || meta.place);
+}
+
+function setMetaCollapsed(collapsed) {
+  $("#metaBar").classList.toggle("collapsed", collapsed);
+  $("#metaToggle").setAttribute("aria-expanded", collapsed ? "false" : "true");
+}
+
+function updateMetaSummary() {
+  const summary = [meta.date, meta.site, meta.place].filter(Boolean).join(" / ");
+  $("#metaSummary").textContent = summary || "未入力";
 }
 
 function openDrawer(mode = "normal", row = null) {
@@ -486,8 +502,13 @@ function bind() {
   ["surveyDate", "siteName", "surveyPlace"].forEach((id) => {
     $(`#${id}`).addEventListener("input", () => {
       readMetaFromInputs();
+      updateMetaSummary();
       saveSoon();
     });
+  });
+  $("#metaToggle").addEventListener("click", () => {
+    const collapsed = $("#metaBar").classList.contains("collapsed");
+    setMetaCollapsed(!collapsed);
   });
   $("#basePoint").addEventListener("input", () => {
     rows[0].point = $("#basePoint").value;

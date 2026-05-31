@@ -107,14 +107,44 @@ input:focus {
   font-size: 24px;
 }
 .meta-bar {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 6px;
   margin-bottom: 8px;
   padding: 7px;
   border: 1px solid #cfd8ce;
   border-radius: 6px;
   background: var(--paper);
+}
+.meta-toggle {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 36px;
+  padding: 5px 7px;
+  border-color: #cfd8ce;
+  background: #f8fbf8;
+  color: var(--ink);
+  text-align: left;
+}
+.meta-toggle span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+.meta-toggle strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meta-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin-top: 7px;
+}
+.meta-bar.collapsed .meta-fields {
+  display: none;
 }
 .base-bar {
   display: grid;
