@@ -538,6 +538,7 @@ function bind() {
   document.addEventListener("gesturestart", (event) => event.preventDefault());
   document.addEventListener("dblclick", (event) => event.preventDefault(), { passive: false });
   $("#menuOpen").addEventListener("click", () => openDrawer("normal"));
+  $("#edgeOpen").addEventListener("click", () => openDrawer("normal"));
   $("#menuClose").addEventListener("click", closeDrawer);
   $("#drawerBackdrop").addEventListener("click", closeDrawer);
   $("#savePoint").addEventListener("click", saveCurrentPoint);

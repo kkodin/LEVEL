@@ -62,7 +62,7 @@ input:focus {
   width: min(420px, 100%);
   min-height: 100vh;
   margin: 0 auto;
-  padding: 12px 10px 190px;
+  padding: 12px 10px 194px;
   background: #eef4ef;
 }
 .header {
@@ -97,10 +97,24 @@ input:focus {
   padding: 0;
   font-size: 24px;
 }
+.edge-open {
+  position: fixed;
+  top: 0;
+  bottom: 194px;
+  left: 0;
+  z-index: 5;
+  width: 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: transparent;
+}
 .survey-summary {
   display: grid;
   gap: 2px;
-  margin-bottom: 8px;
+  margin: 0 -2px 8px;
+  padding: 8px 10px;
+  background: #e4ece6;
   color: var(--ink);
   font-size: 13px;
   font-weight: 700;
@@ -109,8 +123,8 @@ input:focus {
   display: none;
 }
 .meta-bar {
-  margin: 12px 0 10px;
-  padding-top: 10px;
+  margin: 0 0 14px;
+  padding-top: 12px;
   border-top: 1px solid #cfd8ce;
 }
 .meta-bar h3 {
@@ -133,6 +147,9 @@ input:focus {
   border-radius: 6px;
   background: var(--paper);
 }
+.base-bar[hidden] {
+  display: none;
+}
 label {
   display: grid;
   gap: 3px;
@@ -143,7 +160,7 @@ label span {
   font-weight: 800;
 }
 .table-wrap {
-  max-height: 184px;
+  max-height: 292px;
   overflow: auto;
   border: 2px solid #0f1c54;
   background: #fff;
@@ -283,7 +300,8 @@ label span {
 }
 .drawer.open { transform: translateX(0); }
 .drawer.context-mode .drawer-actions,
-.drawer.context-mode .meta-bar {
+.drawer.context-mode .meta-bar,
+.drawer.context-mode .point-list {
   opacity: 0.45;
   pointer-events: none;
 }
@@ -300,7 +318,9 @@ label span {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 14px;
+  margin-bottom: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #cfd8ce;
 }
 .drawer-head button {
   width: 42px;
@@ -308,21 +328,11 @@ label span {
   padding: 0;
   font-size: 24px;
 }
-#savePoint {
-  width: 100%;
-  min-height: 44px;
-  margin: 10px 0;
-}
-#savePoint:disabled {
-  border-color: #cfd8ce;
-  background: #cfd8ce;
-  color: #66756f;
-}
 .drawer-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin: 10px 0 2px;
+  gap: 24px;
+  margin: 14px 0 26px;
 }
 .drawer-actions button {
   min-height: 44px;
@@ -330,10 +340,35 @@ label span {
   background: #d5ded6;
   color: var(--ink);
 }
+.point-entry {
+  display: grid;
+  grid-template-columns: 1fr 92px;
+  gap: 8px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+.point-entry-fields {
+  display: grid;
+  gap: 4px;
+}
+#savedPointName {
+  border-color: var(--accent);
+}
+#savePoint {
+  width: 100%;
+  min-height: 82px;
+  margin: 0;
+  line-height: 1.35;
+}
+#savePoint:disabled {
+  border-color: #cfd8ce;
+  background: #cfd8ce;
+  color: #66756f;
+}
 .point-list {
   display: grid;
   gap: 7px;
-  max-height: calc(100vh - 390px);
+  max-height: calc(100vh - 510px);
   overflow: auto;
 }
 .point-item {
@@ -345,7 +380,7 @@ label span {
   padding: 6px 8px;
   border: 1px solid #cfd8ce;
   border-radius: 6px;
-  background: #f8fbf8;
+  background: #d5ded6;
   color: var(--ink);
   text-align: left;
   transition: transform 120ms ease, opacity 120ms ease;

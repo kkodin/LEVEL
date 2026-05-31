@@ -8,6 +8,7 @@
   </head>
   <body>
     <main class="app">
+      <button id="edgeOpen" class="edge-open" type="button" aria-label="メニュー"></button>
       <header class="header">
         <button id="menuOpen" class="menu-button" type="button" aria-label="メニュー">☰</button>
         <div>
@@ -26,20 +27,6 @@
           </div>
           <button id="menuClose" type="button" aria-label="閉じる">×</button>
         </div>
-        <label>
-          <span>測点名</span>
-          <input id="savedPointName" type="text" placeholder="KBM1" list="pointSuggestions">
-          <datalist id="pointSuggestions"></datalist>
-        </label>
-        <label>
-          <span>数値</span>
-          <input id="savedPointValue" type="text" inputmode="decimal" placeholder="10.830">
-        </label>
-        <button id="savePoint" type="button" disabled>基準点追加</button>
-        <div class="drawer-actions">
-          <button id="exportCsv" type="button">CSVへ保存</button>
-          <button id="importCsv" type="button">CSVを読み込み</button>
-        </div>
         <section class="meta-bar" aria-label="測定情報">
           <h3>測定情報</h3>
           <div class="meta-fields">
@@ -57,13 +44,31 @@
             </label>
           </div>
         </section>
+        <div class="drawer-actions">
+          <button id="exportCsv" type="button">CSVへ保存</button>
+          <button id="importCsv" type="button">CSVを読み込み</button>
+        </div>
+        <div class="point-entry">
+          <div class="point-entry-fields">
+            <label>
+              <span>測点名</span>
+              <input id="savedPointName" type="text" placeholder="KBM1" list="pointSuggestions">
+              <datalist id="pointSuggestions"></datalist>
+            </label>
+            <label>
+              <span>数値</span>
+              <input id="savedPointValue" type="text" inputmode="decimal" placeholder="10.830">
+            </label>
+          </div>
+          <button id="savePoint" type="button" disabled>基準点<br>追加</button>
+        </div>
         <div id="pointList" class="point-list"></div>
       </aside>
       <div id="drawerBackdrop" class="drawer-backdrop"></div>
 
       <section id="surveySummary" class="survey-summary"></section>
 
-      <section class="base-bar" aria-label="基準高入力">
+      <section class="base-bar" aria-label="基準高入力" hidden>
         <label>
           <span>基準点名</span>
           <input id="basePoint" type="text" value="KBM1">
