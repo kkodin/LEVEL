@@ -4,7 +4,7 @@ const META_KEY = "levelBook.meta.v1";
 
 let rows = [];
 let savedPoints = [];
-let meta = { title: "レベル野帳", date: "", site: "", place: "" };
+let meta = { title: "", date: "", site: "", place: "" };
 let selected = { row: 0, field: "gl" };
 let buffer = "";
 let saveTimer = 0;
@@ -93,7 +93,6 @@ function calculate() {
 function render() {
   calculate();
   syncBaseInputs();
-  updateBookTitle();
   updateSurveySummary();
   const tbody = $("#rows");
   tbody.innerHTML = "";
@@ -270,7 +269,6 @@ function syncMetaToInputs() {
   $("#surveyDate").value = meta.date || "";
   $("#siteName").value = meta.site || "";
   $("#surveyPlace").value = meta.place || "";
-  updateBookTitle();
   updateSurveySummary();
 }
 
@@ -278,10 +276,6 @@ function readMetaFromInputs() {
   meta.date = $("#surveyDate").value;
   meta.site = $("#siteName").value;
   meta.place = $("#surveyPlace").value;
-}
-
-function updateBookTitle() {
-  $("#bookTitle").textContent = meta.title || "レベル野帳";
 }
 
 function updateSurveySummary() {
@@ -537,7 +531,6 @@ function escapeHtml(value) {
 function bind() {
   document.addEventListener("gesturestart", (event) => event.preventDefault());
   document.addEventListener("dblclick", (event) => event.preventDefault(), { passive: false });
-  $("#menuOpen").addEventListener("click", () => openDrawer("normal"));
   $("#edgeOpen").addEventListener("click", () => openDrawer("normal"));
   $("#menuClose").addEventListener("click", closeDrawer);
   $("#drawerBackdrop").addEventListener("click", closeDrawer);
@@ -570,7 +563,6 @@ function bind() {
     render();
   });
   $("#activePoint").addEventListener("input", commitPointName);
-  $("#resetBook").addEventListener("click", startNewBook);
   $("#modeBs").addEventListener("click", chooseBs);
   $("#modeFs").addEventListener("click", chooseFs);
   $("#prevRow").addEventListener("click", () => moveRow(-1));
@@ -607,26 +599,13 @@ function bindDrawerSwipe() {
   });
 }
 
-function startNewBook() {
-  if (!window.confirm("BS FSの内容を破棄して新規作成しますか?")) return;
-  meta = { title: "レベル野帳", date: "", site: "", place: "" };
-  syncMetaToInputs();
-  rows = [blankRow()];
-  selected = { row: 0, field: "gl" };
-  buffer = "";
-  syncBaseInputs();
-  render();
-  openDrawer("base", 0);
-  saveSoon();
-}
-
 function exportCsv() {
   calculate();
   readMetaFromInputs();
   const firstDataExcelRow = savedPoints.length + 12;
   const lines = [
     ["LEVEL_APP", "2"],
-    ["TITLE", meta.title || "レベル野帳"],
+    ["TITLE", meta.title || ""],
     ["DATE", meta.date],
     ["SITE", meta.site],
     ["PLACE", meta.place],
@@ -688,7 +667,7 @@ function applyImportedCsv(table, filename) {
       section = "ROWS";
       return;
     }
-    if (tag === "TITLE") nextMeta.title = filename || line[1] || "レベル野帳";
+    if (tag === "TITLE") nextMeta.title = filename || line[1] || "";
     if (tag === "DATE") nextMeta.date = line[1] || "";
     if (tag === "SITE") nextMeta.site = line[1] || "";
     if (tag === "PLACE") nextMeta.place = line[1] || "";

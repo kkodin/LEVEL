@@ -62,57 +62,39 @@ input:focus {
   width: min(420px, 100%);
   min-height: 100vh;
   margin: 0 auto;
-  padding: 12px 10px 194px;
+  padding: 2px 10px 194px 18px;
   background: #eef4ef;
 }
-.header {
-  display: grid;
-  grid-template-columns: 42px 1fr 58px;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-.header p,
 .drawer-head p {
   margin: 0 0 2px;
   color: var(--accent);
   font-size: 10px;
   font-weight: 800;
 }
-.header h1,
 .drawer-head h2 {
   margin: 0;
   line-height: 1.15;
 }
-.header h1 {
-  overflow: hidden;
-  font-size: 25px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .drawer-head h2 { font-size: 22px; }
-.header button { height: 48px; }
-.menu-button {
-  width: 42px;
-  padding: 0;
-  font-size: 24px;
-}
 .edge-open {
   position: fixed;
   top: 0;
-  bottom: 194px;
+  bottom: 0;
   left: 0;
-  z-index: 5;
-  width: 12px;
+  z-index: 19;
+  width: 14px;
+  padding: 0;
   border: 0;
+  border-right: 1px solid rgba(7, 134, 111, 0.35);
   border-radius: 0;
-  background: transparent;
+  background: rgba(7, 134, 111, 0.12);
   color: transparent;
+  font-size: 0;
 }
 .survey-summary {
   display: grid;
   gap: 2px;
-  margin: 0 -2px 8px;
+  margin: 0 -2px 4px;
   padding: 8px 10px;
   background: #e4ece6;
   color: var(--ink);
