@@ -94,6 +94,7 @@ function render() {
   calculate();
   syncBaseInputs();
   updateBookTitle();
+  updateSurveySummary();
   const tbody = $("#rows");
   tbody.innerHTML = "";
   rows.forEach((row, rowIndex) => {
@@ -124,6 +125,7 @@ function render() {
   updateReadout();
   updateModes();
   renderPointList();
+  renderPointSuggestions();
   updateSavePointButton();
 }
 
@@ -269,8 +271,7 @@ function syncMetaToInputs() {
   $("#siteName").value = meta.site || "";
   $("#surveyPlace").value = meta.place || "";
   updateBookTitle();
-  setMetaCollapsed(hasMetaInput());
-  updateMetaSummary();
+  updateSurveySummary();
 }
 
 function readMetaFromInputs() {
@@ -283,18 +284,19 @@ function updateBookTitle() {
   $("#bookTitle").textContent = meta.title || "レベル野帳";
 }
 
-function hasMetaInput() {
-  return Boolean(meta.date || meta.site || meta.place);
+function updateSurveySummary() {
+  const parts = [];
+  if (meta.site) parts.push(`現場名：${meta.site}`);
+  if (meta.place) parts.push(`測定箇所：${meta.place}`);
+  const firstLine = parts.join("　/　");
+  const secondLine = meta.date ? `測定日：${formatSurveyDate(meta.date)}` : "";
+  $("#surveySummary").innerHTML = [firstLine, secondLine].filter(Boolean).map(escapeHtml).join("<br>");
 }
 
-function setMetaCollapsed(collapsed) {
-  $("#metaBar").classList.toggle("collapsed", collapsed);
-  $("#metaToggle").setAttribute("aria-expanded", collapsed ? "false" : "true");
-}
-
-function updateMetaSummary() {
-  const summary = [meta.date, meta.site, meta.place].filter(Boolean).join(" / ");
-  $("#metaSummary").textContent = summary || "未入力";
+function formatSurveyDate(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return value || "";
+  return `${match[1]}.${match[2]}.${match[3]}`;
 }
 
 function openDrawer(mode = "normal", row = null) {
@@ -302,10 +304,14 @@ function openDrawer(mode = "normal", row = null) {
   drawerTargetRow = row;
   drawerSaved = false;
   clearPointEntry();
+  $("#drawer").classList.toggle("context-mode", drawerMode !== "normal");
+  $("#savedPointName").setAttribute("list", "pointSuggestions");
   if ((drawerMode === "base" || drawerMode === "register") && rows[row]) {
     $("#savedPointName").value = drawerMode === "base" ? rows[row].point || "" : "";
     $("#savedPointValue").value = fmtInput(rows[row].gl || "");
   }
+  if (drawerMode === "register") $("#savedPointName").removeAttribute("list");
+  renderPointSuggestions();
   updateSavePointButton();
   window.setTimeout(() => $("#savedPointName").focus(), 0);
   $("#drawer").classList.add("open");
@@ -316,6 +322,7 @@ function closeDrawer() {
   applyBaseEntry();
   applyDrawerPointName();
   $("#drawer").classList.remove("open");
+  $("#drawer").classList.remove("context-mode");
   $("#drawerBackdrop").classList.remove("open");
   drawerMode = "normal";
   drawerTargetRow = null;
@@ -408,11 +415,41 @@ function renderPointList() {
         button.dataset.swiped = "";
         return;
       }
+      if (button.classList.contains("delete-ready")) {
+        deleteSavedPoint(index);
+        return;
+      }
       recallPoint(point);
     });
     bindSwipeDelete(button, index);
     list.appendChild(button);
   });
+}
+
+function renderPointSuggestions() {
+  const datalist = $("#pointSuggestions");
+  if (!datalist) return;
+  const options = new Map();
+  savedPoints.forEach((point) => options.set(point.name, point.value));
+  rows.forEach((row) => {
+    if (row.point && row.gl) options.set(row.point, row.gl);
+  });
+  datalist.innerHTML = "";
+  options.forEach((value, name) => {
+    const option = document.createElement("option");
+    option.value = name;
+    option.label = `GL ${value}`;
+    datalist.appendChild(option);
+  });
+}
+
+function findPointValue(name) {
+  const key = String(name || "").trim();
+  if (!key) return "";
+  const saved = savedPoints.find((point) => point.name === key);
+  if (saved) return saved.value;
+  const row = rows.find((item) => item.point === key && item.gl);
+  return row?.gl || "";
 }
 
 function clearPointEntry() {
@@ -425,6 +462,15 @@ function updateSavePointButton() {
   const name = $("#savedPointName")?.value.trim();
   const value = fmtInput($("#savedPointValue")?.value || "");
   $("#savePoint").disabled = !name || !value;
+}
+
+function handleSavedPointNameInput() {
+  const name = $("#savedPointName").value.trim();
+  if (drawerMode === "base") {
+    const value = findPointValue(name);
+    $("#savedPointValue").value = value || "";
+  }
+  updateSavePointButton();
 }
 
 function deleteSavedPoint(index) {
@@ -460,9 +506,14 @@ function bindSwipeDelete(element, index) {
     const dx = currentX - startX;
     element.classList.remove("swiping");
     element.style.transform = "";
-    if (Math.abs(dx) > 70) {
+    if (dx < -70) {
+      element.classList.add("delete-ready");
       element.dataset.swiped = "1";
-      deleteSavedPoint(index);
+      window.setTimeout(() => {
+        element.dataset.swiped = "";
+      }, 250);
+    } else if (dx > 30) {
+      element.classList.remove("delete-ready");
     }
   });
 
@@ -490,7 +541,7 @@ function bind() {
   $("#menuClose").addEventListener("click", closeDrawer);
   $("#drawerBackdrop").addEventListener("click", closeDrawer);
   $("#savePoint").addEventListener("click", saveCurrentPoint);
-  $("#savedPointName").addEventListener("input", updateSavePointButton);
+  $("#savedPointName").addEventListener("input", handleSavedPointNameInput);
   $("#savedPointValue").addEventListener("input", updateSavePointButton);
   $("#savedPointValue").addEventListener("click", () => {
     const value = drawerMode === "register" || drawerMode === "base"
@@ -502,14 +553,11 @@ function bind() {
   ["surveyDate", "siteName", "surveyPlace"].forEach((id) => {
     $(`#${id}`).addEventListener("input", () => {
       readMetaFromInputs();
-      updateMetaSummary();
+      updateSurveySummary();
       saveSoon();
     });
   });
-  $("#metaToggle").addEventListener("click", () => {
-    const collapsed = $("#metaBar").classList.contains("collapsed");
-    setMetaCollapsed(!collapsed);
-  });
+  bindDrawerSwipe();
   $("#basePoint").addEventListener("input", () => {
     rows[0].point = $("#basePoint").value;
     render();
@@ -538,6 +586,23 @@ function bind() {
     if (button.dataset.action === "clear") clearBuffer();
     if (button.dataset.action === "left") moveField(-1);
     if (button.dataset.action === "right") moveField(1);
+  });
+}
+
+function bindDrawerSwipe() {
+  let startX = 0;
+  let swiping = false;
+  $("#drawer").addEventListener("pointerdown", (event) => {
+    startX = event.clientX;
+    swiping = true;
+  });
+  $("#drawer").addEventListener("pointerup", (event) => {
+    if (!swiping) return;
+    swiping = false;
+    if (event.clientX - startX < -70) closeDrawer();
+  });
+  $("#drawer").addEventListener("pointercancel", () => {
+    swiping = false;
   });
 }
 

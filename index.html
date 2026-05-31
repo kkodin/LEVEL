@@ -14,10 +14,7 @@
           <p>LEVEL SURVEY</p>
           <h1 id="bookTitle">レベル野帳</h1>
         </div>
-        <div class="header-actions">
-          <button id="importCsv" type="button">読込</button>
-          <button id="exportCsv" type="button">CSV</button>
-        </div>
+        <button id="resetBook" type="button">新規</button>
         <input id="csvFile" type="file" accept=".csv,text/csv" hidden>
       </header>
 
@@ -31,37 +28,40 @@
         </div>
         <label>
           <span>測点名</span>
-          <input id="savedPointName" type="text" placeholder="KBM1">
+          <input id="savedPointName" type="text" placeholder="KBM1" list="pointSuggestions">
+          <datalist id="pointSuggestions"></datalist>
         </label>
         <label>
           <span>数値</span>
           <input id="savedPointValue" type="text" inputmode="decimal" placeholder="10.830">
         </label>
-        <button id="savePoint" type="button" disabled>台帳に保存</button>
+        <button id="savePoint" type="button" disabled>基準点追加</button>
+        <div class="drawer-actions">
+          <button id="exportCsv" type="button">CSVへ保存</button>
+          <button id="importCsv" type="button">CSVを読み込み</button>
+        </div>
+        <section class="meta-bar" aria-label="測定情報">
+          <h3>測定情報</h3>
+          <div class="meta-fields">
+            <label>
+              <span>測定日</span>
+              <input id="surveyDate" type="date">
+            </label>
+            <label>
+              <span>現場名</span>
+              <input id="siteName" type="text">
+            </label>
+            <label>
+              <span>測定箇所</span>
+              <input id="surveyPlace" type="text">
+            </label>
+          </div>
+        </section>
         <div id="pointList" class="point-list"></div>
       </aside>
       <div id="drawerBackdrop" class="drawer-backdrop"></div>
 
-      <section id="metaBar" class="meta-bar" aria-label="測定情報">
-        <button id="metaToggle" class="meta-toggle" type="button" aria-expanded="true">
-          <span>測定情報</span>
-          <strong id="metaSummary">未入力</strong>
-        </button>
-        <div id="metaFields" class="meta-fields">
-          <label>
-            <span>測定日</span>
-            <input id="surveyDate" type="date">
-          </label>
-          <label>
-            <span>現場名</span>
-            <input id="siteName" type="text">
-          </label>
-          <label>
-            <span>測定箇所</span>
-            <input id="surveyPlace" type="text">
-          </label>
-        </div>
-      </section>
+      <section id="surveySummary" class="survey-summary"></section>
 
       <section class="base-bar" aria-label="基準高入力">
         <label>
@@ -72,7 +72,6 @@
           <span>基準高 GL</span>
           <input id="baseGl" type="text" inputmode="none" value="10.830" readonly>
         </label>
-        <button id="resetBook" type="button">新規</button>
       </section>
 
       <section class="table-wrap" aria-label="野帳表">

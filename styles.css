@@ -67,7 +67,7 @@ input:focus {
 }
 .header {
   display: grid;
-  grid-template-columns: 42px 1fr 96px;
+  grid-template-columns: 42px 1fr 58px;
   align-items: center;
   gap: 8px;
   margin-bottom: 10px;
@@ -92,63 +92,40 @@ input:focus {
 }
 .drawer-head h2 { font-size: 22px; }
 .header button { height: 48px; }
-.header-actions {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 4px;
-}
-.header-actions button {
-  height: 22px;
-  font-size: 12px;
-}
 .menu-button {
   width: 42px;
   padding: 0;
   font-size: 24px;
 }
-.meta-bar {
-  margin-bottom: 8px;
-  padding: 7px;
-  border: 1px solid #cfd8ce;
-  border-radius: 6px;
-  background: var(--paper);
-}
-.meta-toggle {
+.survey-summary {
   display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 8px;
-  align-items: center;
-  width: 100%;
-  min-height: 36px;
-  padding: 5px 7px;
-  border-color: #cfd8ce;
-  background: #f8fbf8;
+  gap: 2px;
+  margin-bottom: 8px;
   color: var(--ink);
-  text-align: left;
-}
-.meta-toggle span {
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 800;
-}
-.meta-toggle strong {
-  overflow: hidden;
   font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-weight: 700;
+}
+.survey-summary:empty {
+  display: none;
+}
+.meta-bar {
+  margin: 12px 0 10px;
+  padding-top: 10px;
+  border-top: 1px solid #cfd8ce;
+}
+.meta-bar h3 {
+  margin: 0 0 8px;
+  color: var(--ink);
+  font-size: 15px;
 }
 .meta-fields {
   display: grid;
   grid-template-columns: 1fr;
   gap: 6px;
-  margin-top: 7px;
-}
-.meta-bar.collapsed .meta-fields {
-  display: none;
 }
 .base-bar {
   display: grid;
-  grid-template-columns: 1fr 1fr 58px;
+  grid-template-columns: 1fr 1fr;
   gap: 6px;
   margin-bottom: 8px;
   padding: 7px;
@@ -305,6 +282,11 @@ label span {
   transition: transform 160ms ease;
 }
 .drawer.open { transform: translateX(0); }
+.drawer.context-mode .drawer-actions,
+.drawer.context-mode .meta-bar {
+  opacity: 0.45;
+  pointer-events: none;
+}
 .drawer-backdrop {
   position: fixed;
   inset: 0;
@@ -336,13 +318,26 @@ label span {
   background: #cfd8ce;
   color: #66756f;
 }
+.drawer-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 10px 0 2px;
+}
+.drawer-actions button {
+  min-height: 44px;
+  border-color: #cfd8ce;
+  background: #d5ded6;
+  color: var(--ink);
+}
 .point-list {
   display: grid;
   gap: 7px;
-  max-height: calc(100vh - 250px);
+  max-height: calc(100vh - 390px);
   overflow: auto;
 }
 .point-item {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 8px;
@@ -355,6 +350,23 @@ label span {
   text-align: left;
   transition: transform 120ms ease, opacity 120ms ease;
   touch-action: pan-y;
+}
+.point-item.delete-ready {
+  transform: translateX(-82px);
+}
+.point-item.delete-ready::after {
+  position: absolute;
+  top: 0;
+  right: -82px;
+  display: grid;
+  width: 74px;
+  height: 100%;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--active);
+  color: #fff;
+  content: "削除";
+  font-weight: 800;
 }
 .point-item strong,
 .point-item span {
