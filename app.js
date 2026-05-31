@@ -1,8 +1,10 @@
 const STORAGE_KEY = "levelBook.image2.v1";
 const POINTS_KEY = "levelBook.savedPoints.v1";
+const META_KEY = "levelBook.meta.v1";
 
 let rows = [];
 let savedPoints = [];
+let meta = { title: "レベル野帳", date: "", site: "", place: "" };
 let selected = { row: 0, field: "gl" };
 let buffer = "";
 let saveTimer = 0;
@@ -20,6 +22,7 @@ function blankRow(seed = {}) {
 function load() {
   rows = readJson(STORAGE_KEY, []);
   savedPoints = readJson(POINTS_KEY, []);
+  meta = { ...meta, ...readJson(META_KEY, {}) };
   if (!rows.length) {
     rows = [
       blankRow({ bs: "1.058", gl: "10.830", point: "KBM1" }),
@@ -29,6 +32,7 @@ function load() {
   }
   $("#basePoint").value = rows[0]?.point || "KBM1";
   $("#baseGl").value = rows[0]?.gl || "";
+  syncMetaToInputs();
 }
 
 function readJson(key, fallback) {
@@ -45,6 +49,7 @@ function saveSoon() {
   saveTimer = window.setTimeout(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
     localStorage.setItem(POINTS_KEY, JSON.stringify(savedPoints));
+    localStorage.setItem(META_KEY, JSON.stringify(meta));
     $("#saveState").textContent = "保存済み";
   }, 120);
 }
@@ -87,6 +92,8 @@ function calculate() {
 
 function render() {
   calculate();
+  syncBaseInputs();
+  updateBookTitle();
   const tbody = $("#rows");
   tbody.innerHTML = "";
   rows.forEach((row, rowIndex) => {
@@ -117,7 +124,7 @@ function render() {
   updateReadout();
   updateModes();
   renderPointList();
-  renderMeasuredPointSelect();
+  updateSavePointButton();
 }
 
 function selectCell(row, field) {
@@ -171,7 +178,7 @@ function finalizeSelectedValue() {
 function commitPointName() {
   if (!rows[selected.row]) rows[selected.row] = blankRow();
   rows[selected.row].point = $("#activePoint").value;
-  if (selected.row === 0) $("#basePoint").value = rows[0].point;
+  syncBaseInputs();
   render();
   saveSoon();
 }
@@ -252,21 +259,45 @@ function speakKey(key) {
   window.speechSynthesis.speak(utterance);
 }
 
+function syncBaseInputs() {
+  $("#basePoint").value = rows[0]?.point || "";
+  $("#baseGl").value = rows[0]?.gl || "";
+}
+
+function syncMetaToInputs() {
+  $("#surveyDate").value = meta.date || "";
+  $("#siteName").value = meta.site || "";
+  $("#surveyPlace").value = meta.place || "";
+  updateBookTitle();
+}
+
+function readMetaFromInputs() {
+  meta.date = $("#surveyDate").value;
+  meta.site = $("#siteName").value;
+  meta.place = $("#surveyPlace").value;
+}
+
+function updateBookTitle() {
+  $("#bookTitle").textContent = meta.title || "レベル野帳";
+}
+
 function openDrawer(mode = "normal", row = null) {
   drawerMode = mode;
   drawerTargetRow = row;
   drawerSaved = false;
   clearPointEntry();
-  if (drawerMode === "register" && rows[row]) {
+  if ((drawerMode === "base" || drawerMode === "register") && rows[row]) {
+    $("#savedPointName").value = drawerMode === "base" ? rows[row].point || "" : "";
     $("#savedPointValue").value = fmtInput(rows[row].gl || "");
-    window.setTimeout(() => $("#savedPointName").focus(), 0);
   }
-  renderMeasuredPointSelect();
+  updateSavePointButton();
+  window.setTimeout(() => $("#savedPointName").focus(), 0);
   $("#drawer").classList.add("open");
   $("#drawerBackdrop").classList.add("open");
 }
 
 function closeDrawer() {
+  applyBaseEntry();
   applyDrawerPointName();
   $("#drawer").classList.remove("open");
   $("#drawerBackdrop").classList.remove("open");
@@ -277,7 +308,20 @@ function closeDrawer() {
 
 function openPointDrawer(row) {
   if (!rows[row]) rows[row] = blankRow();
-  openDrawer(rows[row].fs ? "register" : "recall", row);
+  openDrawer(rows[row].fs ? "register" : "base", row);
+}
+
+function applyBaseEntry() {
+  if (drawerMode !== "base" || drawerTargetRow === null || drawerSaved) return;
+  const name = $("#savedPointName").value.trim();
+  const value = fmtInput($("#savedPointValue").value);
+  if (!name || !value) return;
+  rows[drawerTargetRow] = blankRow({ ...rows[drawerTargetRow], point: name, gl: value });
+  if (drawerTargetRow === 0) syncBaseInputs();
+  selected = { row: drawerTargetRow, field: "gl" };
+  buffer = value;
+  render();
+  saveSoon();
 }
 
 function applyDrawerPointName() {
@@ -295,11 +339,19 @@ function saveCurrentPoint() {
   const name = $("#savedPointName").value.trim();
   const value = fmtInput($("#savedPointValue").value);
   if (!name || !value) return;
+  const shouldCloseAfterSave = drawerMode !== "normal";
   const existing = savedPoints.find((point) => point.name === name);
   if (existing) {
     existing.value = value;
   } else {
     savedPoints.push({ name, value });
+  }
+  if (drawerMode === "base" && drawerTargetRow !== null && rows[drawerTargetRow]) {
+    rows[drawerTargetRow] = blankRow({ ...rows[drawerTargetRow], point: name, gl: value });
+    selected = { row: drawerTargetRow, field: "gl" };
+    buffer = value;
+    drawerSaved = true;
+    if (drawerTargetRow === 0) syncBaseInputs();
   }
   if (drawerMode === "register" && drawerTargetRow !== null && rows[drawerTargetRow]) {
     rows[drawerTargetRow].point = name;
@@ -311,16 +363,14 @@ function saveCurrentPoint() {
   renderPointList();
   render();
   saveSoon();
+  if (shouldCloseAfterSave) closeDrawer();
 }
 
 function recallPoint(point) {
-  const row = drawerMode === "recall" && drawerTargetRow !== null ? drawerTargetRow : 0;
+  const row = drawerMode === "base" && drawerTargetRow !== null ? drawerTargetRow : 0;
   if (!rows[row]) rows[row] = blankRow();
   rows[row] = blankRow({ ...rows[row], point: point.name, gl: point.value });
-  if (row === 0) {
-    $("#basePoint").value = point.name;
-    $("#baseGl").value = point.value;
-  }
+  if (row === 0) syncBaseInputs();
   selected = { row, field: "gl" };
   buffer = point.value;
   closeDrawer();
@@ -349,33 +399,16 @@ function renderPointList() {
   });
 }
 
-function renderMeasuredPointSelect() {
-  const select = $("#measuredPointSelect");
-  if (!select) return;
-  const currentValue = select.value;
-  select.innerHTML = `<option value="">選択してください</option>`;
-  rows.forEach((row, index) => {
-    if (!row.point || !row.gl) return;
-    const option = document.createElement("option");
-    option.value = String(index);
-    option.textContent = `${row.point} / GL ${row.gl}`;
-    select.appendChild(option);
-  });
-  select.value = currentValue;
-}
-
-function useMeasuredPoint() {
-  const index = Number($("#measuredPointSelect").value);
-  const row = rows[index];
-  if (!row) return;
-  $("#savedPointName").value = row.point || "";
-  $("#savedPointValue").value = fmtInput(row.gl || "");
-}
-
 function clearPointEntry() {
   $("#savedPointName").value = "";
   $("#savedPointValue").value = "";
-  $("#measuredPointSelect").value = "";
+  updateSavePointButton();
+}
+
+function updateSavePointButton() {
+  const name = $("#savedPointName")?.value.trim();
+  const value = fmtInput($("#savedPointValue")?.value || "");
+  $("#savePoint").disabled = !name || !value;
 }
 
 function deleteSavedPoint(index) {
@@ -437,14 +470,24 @@ function escapeHtml(value) {
 function bind() {
   document.addEventListener("gesturestart", (event) => event.preventDefault());
   document.addEventListener("dblclick", (event) => event.preventDefault(), { passive: false });
-  $("#menuOpen").addEventListener("click", openDrawer);
+  $("#menuOpen").addEventListener("click", () => openDrawer("normal"));
   $("#menuClose").addEventListener("click", closeDrawer);
   $("#drawerBackdrop").addEventListener("click", closeDrawer);
   $("#savePoint").addEventListener("click", saveCurrentPoint);
-  $("#measuredPointSelect").addEventListener("change", useMeasuredPoint);
+  $("#savedPointName").addEventListener("input", updateSavePointButton);
+  $("#savedPointValue").addEventListener("input", updateSavePointButton);
   $("#savedPointValue").addEventListener("click", () => {
-    const value = rows[selected.row]?.[selected.field] || buffer || "";
+    const value = drawerMode === "register" || drawerMode === "base"
+      ? rows[drawerTargetRow]?.gl || ""
+      : rows[selected.row]?.[selected.field] || buffer || "";
     $("#savedPointValue").value = value;
+    updateSavePointButton();
+  });
+  ["surveyDate", "siteName", "surveyPlace"].forEach((id) => {
+    $(`#${id}`).addEventListener("input", () => {
+      readMetaFromInputs();
+      saveSoon();
+    });
   });
   $("#basePoint").addEventListener("input", () => {
     rows[0].point = $("#basePoint").value;
@@ -457,18 +500,14 @@ function bind() {
     render();
   });
   $("#activePoint").addEventListener("input", commitPointName);
-  $("#resetBook").addEventListener("click", () => {
-    rows = [blankRow({ point: $("#basePoint").value || "KBM1", gl: $("#baseGl").value || "" })];
-    selected = { row: 0, field: "gl" };
-    buffer = rows[0].gl;
-    render();
-    saveSoon();
-  });
+  $("#resetBook").addEventListener("click", startNewBook);
   $("#modeBs").addEventListener("click", chooseBs);
   $("#modeFs").addEventListener("click", chooseFs);
   $("#prevRow").addEventListener("click", () => moveRow(-1));
   $("#nextRow").addEventListener("click", () => moveRow(1));
   $("#exportCsv").addEventListener("click", exportCsv);
+  $("#importCsv").addEventListener("click", () => $("#csvFile").click());
+  $("#csvFile").addEventListener("change", importCsv);
   document.querySelector(".keypad").addEventListener("click", (event) => {
     const button = event.target.closest("button");
     if (!button) return;
@@ -481,16 +520,44 @@ function bind() {
   });
 }
 
+function startNewBook() {
+  if (!window.confirm("BS FSの内容を破棄して新規作成しますか?")) return;
+  meta = { title: "レベル野帳", date: "", site: "", place: "" };
+  syncMetaToInputs();
+  rows = [blankRow()];
+  selected = { row: 0, field: "gl" };
+  buffer = "";
+  syncBaseInputs();
+  render();
+  openDrawer("base", 0);
+  saveSoon();
+}
+
 function exportCsv() {
   calculate();
-  const header = ["BS", "IH", "FS", "GL", "測点名"];
-  const body = rows.map((row, index) => csvRow(row, index));
-  const csv = [header, ...body].map((line) => line.map(csvCell).join(",")).join("\n");
+  readMetaFromInputs();
+  const firstDataExcelRow = savedPoints.length + 12;
+  const lines = [
+    ["LEVEL_APP", "2"],
+    ["TITLE", meta.title || "レベル野帳"],
+    ["DATE", meta.date],
+    ["SITE", meta.site],
+    ["PLACE", meta.place],
+    [],
+    ["POINTS"],
+    ["測点名", "数値"],
+    ...savedPoints.map((point) => [point.name, point.value]),
+    [],
+    ["ROWS"],
+    ["BS", "IH", "FS", "GL", "測点名"],
+    ...rows.map((row, index) => csvRow(row, index, firstDataExcelRow))
+  ];
+  const csv = lines.map((line) => line.map(csvCell).join(",")).join("\n");
   download("level-book.csv", `\ufeff${csv}`, "text/csv;charset=utf-8");
 }
 
-function csvRow(row, index) {
-  const excelRow = index + 2;
+function csvRow(row, index, firstDataExcelRow) {
+  const excelRow = firstDataExcelRow + index;
   const prevExcelRow = excelRow - 1;
   const ihValue = row.bs ? `=D${excelRow}+A${excelRow}` : "";
   const glValue = index > 0 && row.fs
@@ -502,6 +569,111 @@ function csvRow(row, index) {
 function csvCell(value) {
   const text = String(value ?? "").replaceAll('"', '""');
   return text.startsWith("=") ? text : `"${text}"`;
+}
+
+function importCsv(event) {
+  const file = event.target.files?.[0];
+  event.target.value = "";
+  if (!file) return;
+  if (!window.confirm("現在の内容を破棄してCSVを読み込みますか?")) return;
+  const reader = new FileReader();
+  reader.addEventListener("load", () => {
+    const table = parseCsv(String(reader.result || ""));
+    applyImportedCsv(table, file.name);
+  });
+  reader.readAsText(file, "utf-8");
+}
+
+function applyImportedCsv(table, filename) {
+  const nextMeta = { title: filename, date: "", site: "", place: "" };
+  const nextPoints = [];
+  const nextRows = [];
+  let section = "";
+
+  table.forEach((line) => {
+    const tag = stripBom(line[0] || "");
+    if (!tag) return;
+    if (tag === "POINTS" || tag === "ROWS") {
+      section = tag;
+      return;
+    }
+    if (tag === "BS") {
+      section = "ROWS";
+      return;
+    }
+    if (tag === "TITLE") nextMeta.title = filename || line[1] || "レベル野帳";
+    if (tag === "DATE") nextMeta.date = line[1] || "";
+    if (tag === "SITE") nextMeta.site = line[1] || "";
+    if (tag === "PLACE") nextMeta.place = line[1] || "";
+    if (section === "POINTS" && tag !== "測点名") {
+      const name = line[0]?.trim();
+      const value = fmtInput(line[1] || "");
+      if (name && value) nextPoints.push({ name, value });
+    }
+    if (section === "ROWS" && tag !== "BS") {
+      const bs = cleanCsvNumber(line[0]);
+      const fs = cleanCsvNumber(line[2]);
+      const gl = cleanCsvNumber(line[3]);
+      const point = line[4] || "";
+      if (bs || fs || gl || point) nextRows.push(blankRow({ bs, fs, gl, point }));
+    }
+  });
+
+  rows = nextRows.length ? nextRows : [blankRow()];
+  savedPoints = nextPoints;
+  meta = nextMeta;
+  selected = { row: 0, field: "gl" };
+  buffer = rows[0]?.gl || "";
+  syncMetaToInputs();
+  syncBaseInputs();
+  render();
+  saveSoon();
+}
+
+function cleanCsvNumber(value) {
+  const text = String(value || "").trim();
+  return text.startsWith("=") ? "" : fmtInput(text);
+}
+
+function parseCsv(text) {
+  const rowsOut = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+  const source = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  for (let i = 0; i < source.length; i += 1) {
+    const char = source[i];
+    const next = source[i + 1];
+    if (quoted) {
+      if (char === "\"" && next === "\"") {
+        cell += "\"";
+        i += 1;
+      } else if (char === "\"") {
+        quoted = false;
+      } else {
+        cell += char;
+      }
+    } else if (char === "\"") {
+      quoted = true;
+    } else if (char === ",") {
+      row.push(cell);
+      cell = "";
+    } else if (char === "\n") {
+      row.push(cell);
+      rowsOut.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += char;
+    }
+  }
+  row.push(cell);
+  rowsOut.push(row);
+  return rowsOut;
+}
+
+function stripBom(value) {
+  return String(value || "").replace(/^\ufeff/, "");
 }
 
 function download(filename, content, type) {

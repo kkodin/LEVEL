@@ -12,9 +12,13 @@
         <button id="menuOpen" class="menu-button" type="button" aria-label="メニュー">☰</button>
         <div>
           <p>LEVEL SURVEY</p>
-          <h1>レベル野帳</h1>
+          <h1 id="bookTitle">レベル野帳</h1>
         </div>
-        <button id="exportCsv" type="button">CSV</button>
+        <div class="header-actions">
+          <button id="importCsv" type="button">読込</button>
+          <button id="exportCsv" type="button">CSV</button>
+        </div>
+        <input id="csvFile" type="file" accept=".csv,text/csv" hidden>
       </header>
 
       <aside id="drawer" class="drawer" aria-label="測点台帳">
@@ -33,16 +37,25 @@
           <span>数値</span>
           <input id="savedPointValue" type="text" inputmode="decimal" placeholder="10.830">
         </label>
-        <label>
-          <span>測量結果から取得</span>
-          <select id="measuredPointSelect">
-            <option value="">選択してください</option>
-          </select>
-        </label>
-        <button id="savePoint" type="button">台帳に保存</button>
+        <button id="savePoint" type="button" disabled>台帳に保存</button>
         <div id="pointList" class="point-list"></div>
       </aside>
       <div id="drawerBackdrop" class="drawer-backdrop"></div>
+
+      <section class="meta-bar" aria-label="測定情報">
+        <label>
+          <span>測定日</span>
+          <input id="surveyDate" type="date">
+        </label>
+        <label>
+          <span>現場名</span>
+          <input id="siteName" type="text">
+        </label>
+        <label>
+          <span>測定箇所</span>
+          <input id="surveyPlace" type="text">
+        </label>
+      </section>
 
       <section class="base-bar" aria-label="基準高入力">
         <label>
