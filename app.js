@@ -21,18 +21,22 @@ function blankRow(seed = {}) {
 
 function load() {
   rows = readJson(STORAGE_KEY, []);
-  savedPoints = readJson(POINTS_KEY, []);
-  meta = { ...meta, ...readJson(META_KEY, {}) };
+  savedPoints = [];
+  meta = { title: "", date: todayString(), site: "", place: "" };
   if (!rows.length) {
-    rows = [
-      blankRow({ bs: "1.058", gl: "10.830", point: "KBM1" }),
-      blankRow({ bs: "0.883", fs: "3.481", point: "カルバート上流部" }),
-      blankRow({ fs: "0.967", point: "カルバート接続部" })
-    ];
+    rows = [blankRow()];
   }
-  $("#basePoint").value = rows[0]?.point || "KBM1";
+  $("#basePoint").value = rows[0]?.point || "";
   $("#baseGl").value = rows[0]?.gl || "";
   syncMetaToInputs();
+}
+
+function todayString() {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function readJson(key, fallback) {
@@ -205,9 +209,11 @@ function backspace() {
 }
 
 function clearBuffer() {
-  if (!window.confirm("BS FSの数値を消去してよいですか?")) return;
-  rows = rows.map((row) => blankRow({ ...row, bs: "", fs: "" }));
-  if (selected.field === "bs" || selected.field === "fs") buffer = "";
+  if (!window.confirm("BS FS GL 測点名を消去してよいですか?")) return;
+  rows = [blankRow()];
+  selected = { row: 0, field: "gl" };
+  buffer = "";
+  syncBaseInputs();
   render();
   saveSoon();
 }
@@ -619,7 +625,17 @@ function exportCsv() {
     ...rows.map((row, index) => csvRow(row, index, firstDataExcelRow))
   ];
   const csv = lines.map((line) => line.map(csvCell).join(",")).join("\n");
-  download("level-book.csv", `\ufeff${csv}`, "text/csv;charset=utf-8");
+  download(csvFilename(), `\ufeff${csv}`, "text/csv;charset=utf-8");
+}
+
+function csvFilename() {
+  const site = sanitizeFilename(meta.site || "現場名未入力");
+  const date = sanitizeFilename(meta.date || todayString());
+  return `${site}_${date}.csv`;
+}
+
+function sanitizeFilename(value) {
+  return String(value || "").trim().replace(/[\\/:*?"<>|]/g, "_") || "未入力";
 }
 
 function csvRow(row, index, firstDataExcelRow) {
