@@ -791,19 +791,41 @@ label span {
 
 .table-switch {
   display: grid;
-  grid-template-columns: 1fr 54px 74px;
-  gap: 7px;
-  align-items: end;
+  gap: 6px;
   margin: 0 0 6px;
   padding: 7px;
   border: 1px solid #cfd8ce;
   border-radius: 6px;
   background: var(--paper);
 }
+.table-switch-top {
+  display: grid;
+  grid-template-columns: 1fr 54px;
+  gap: 7px;
+  align-items: end;
+}
+.table-switch-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
 .table-switch button {
   min-height: 34px;
   padding: 0 8px;
   font-size: 14px;
+}
+.table-switch-actions button {
+  min-height: 30px;
+  font-size: 13px;
+}
+#deleteTable {
+  border-color: var(--active);
+  background: #ffe8ea;
+  color: var(--active);
+}
+#deleteTable:disabled {
+  opacity: 0.38;
+  pointer-events: none;
 }
 #lockTable {
   border-color: #cfd8ce;

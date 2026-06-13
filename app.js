@@ -113,6 +113,8 @@ function renderTableSelect() {
     select.appendChild(option);
   });
   select.value = String(activeTableIndex);
+  const deleteBtn = $("#deleteTable");
+  if (deleteBtn) deleteBtn.disabled = tables.length <= 1;
 }
 
 function switchTable(index) {
@@ -127,6 +129,49 @@ function switchTable(index) {
   syncBaseInputs();
   render();
   saveSoon();
+}
+
+function renameTable() {
+  const table = currentTable();
+  showInputModal(
+    "表の名称変更",
+    [
+      { id: "modal-rename-name", label: "作業名（表の名前）", value: table.name || "", type: "text" },
+      { id: "modal-rename-date", label: "作成日", value: table.date || todayString(), type: "date" }
+    ],
+    (values) => {
+      const name = (values["modal-rename-name"] || "").trim();
+      if (!name) return;
+      tables[activeTableIndex].name = name;
+      tables[activeTableIndex].date = normalizeDateInput(values["modal-rename-date"] || todayString());
+      syncTableToLegacyMeta();
+      syncMetaToInputs();
+      render();
+      saveSoon();
+    }
+  );
+}
+
+function deleteTable() {
+  if (tables.length <= 1) return;
+  syncActiveTable();
+  showConfirmModal(
+    "表を削除",
+    `「${currentTable().name}」を削除してよいですか？`,
+    () => {
+      tables.splice(activeTableIndex, 1);
+      activeTableIndex = Math.max(0, activeTableIndex - 1);
+      rows = tables[activeTableIndex].rows;
+      expandedClosureRows.clear();
+      syncTableToLegacyMeta();
+      selected = { row: 0, field: "gl" };
+      buffer = rows[0]?.gl || "";
+      syncMetaToInputs();
+      syncBaseInputs();
+      render();
+      saveSoon();
+    }
+  );
 }
 
 function addTable() {
@@ -1012,6 +1057,8 @@ function bind() {
     $("#csvFile").click();
   });
   $("#tableSelect").addEventListener("change", (event) => switchTable(Number(event.target.value)));
+  $("#renameTable").addEventListener("click", renameTable);
+  $("#deleteTable").addEventListener("click", deleteTable);
   $("#addTable").addEventListener("click", addTable);
   $("#lockTable").addEventListener("click", toggleLock);
   $("#csvFile").addEventListener("change", importCsv);

@@ -101,12 +101,18 @@
       <section id="surveySummary" class="survey-summary"></section>
 
       <section class="table-switch" aria-label="計算表切替">
-        <label>
-          <span>計算表</span>
-          <select id="tableSelect"></select>
-        </label>
-        <button id="lockTable" type="button">保護</button>
-        <button id="addTable" type="button">表追加</button>
+        <div class="table-switch-top">
+          <label>
+            <span>計算表</span>
+            <select id="tableSelect"></select>
+          </label>
+          <button id="lockTable" type="button">保護</button>
+        </div>
+        <div class="table-switch-actions">
+          <button id="renameTable" type="button">名称変更</button>
+          <button id="deleteTable" type="button">表削除</button>
+          <button id="addTable" type="button">表追加</button>
+        </div>
       </section>
 
       <section class="base-bar" aria-label="基準高入力" hidden>
