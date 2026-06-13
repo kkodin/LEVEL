@@ -18,6 +18,7 @@ let startupImport = false;
 let setupComplete = false;
 let hasSavedWork = false;
 let pickerTargetRow = null;
+let expandedClosureRows = new Set();
 
 const $ = (selector) => document.querySelector(selector);
 const fields = ["bs", "ih", "fs", "gl", "point"];
@@ -117,6 +118,7 @@ function switchTable(index) {
   syncActiveTable();
   activeTableIndex = Math.max(0, Math.min(tables.length - 1, index));
   rows = tables[activeTableIndex]?.rows || [blankRow()];
+  expandedClosureRows.clear();
   syncTableToLegacyMeta();
   selected = { row: 0, field: "gl" };
   buffer = rows[0]?.gl || "";
@@ -243,18 +245,53 @@ function render() {
   tbody.innerHTML = "";
   rows.forEach((row, rowIndex) => {
     const tr = document.createElement("tr");
+    tr.dataset.rowIndex = String(rowIndex);
+    const closure = closureForRow(row);
     fields.forEach((field) => {
       const td = document.createElement("td");
       td.className = field;
-      td.textContent = row[field] || "";
       td.dataset.row = String(rowIndex);
       td.dataset.field = field;
       if (field === "ih" || (field === "gl" && rowIndex > 0)) td.classList.add("computed");
       if (selected.row === rowIndex && selected.field === field) td.classList.add("selected");
+      if (field === "point" && closure) {
+        const isExpanded = expandedClosureRows.has(rowIndex);
+        td.appendChild(document.createTextNode(row.point || ""));
+        const toggle = document.createElement("span");
+        toggle.className = "closure-toggle";
+        toggle.textContent = isExpanded ? "▲" : "▼";
+        toggle.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (expandedClosureRows.has(rowIndex)) {
+            expandedClosureRows.delete(rowIndex);
+          } else {
+            expandedClosureRows.add(rowIndex);
+          }
+          render();
+        });
+        td.appendChild(toggle);
+      } else {
+        td.textContent = row[field] || "";
+      }
       td.addEventListener("click", () => selectCell(rowIndex, field));
       tr.appendChild(td);
     });
     tbody.appendChild(tr);
+    if (closure && expandedClosureRows.has(rowIndex)) {
+      const diffMm = Math.round(closure.diff * 1000);
+      const sign = diffMm >= 0 ? "+" : "";
+      const absDiff = Math.abs(closure.diff);
+      let cls = "ok";
+      if (absDiff >= 0.01) cls = "error";
+      else if (absDiff >= 0.005) cls = "warn";
+      const expandTr = document.createElement("tr");
+      expandTr.className = "closure-expand-row";
+      const expandTd = document.createElement("td");
+      expandTd.colSpan = 5;
+      expandTd.innerHTML = `既知 ${closure.ref.toFixed(3)}　測定 ${closure.measured.toFixed(3)}　誤差 <span class="closure-badge ${cls}">${sign}${diffMm} mm</span>`;
+      expandTr.appendChild(expandTd);
+      tbody.appendChild(expandTr);
+    }
   });
   for (let i = rows.length; i < 8; i += 1) {
     const tr = document.createElement("tr");
@@ -279,7 +316,6 @@ function render() {
   renderTableSelect();
   updateSavePointButton();
   updateRowHighlights();
-  updateClosureDisplay();
 }
 
 function selectCell(row, field) {
@@ -383,6 +419,7 @@ function clearBuffer() {
 
 function clearAllRows() {
   rows = [blankRow()];
+  expandedClosureRows.clear();
   selected = { row: 0, field: "gl" };
   buffer = "";
   syncBaseInputs();
@@ -1441,6 +1478,16 @@ function confirmAndAdvance() {
 }
 
 // ── Closure difference (閉合差) ────────────────────────────────────────────
+function closureForRow(row) {
+  if (!row.point || !row.gl) return null;
+  const saved = savedPoints.find((p) => p.name === row.point);
+  if (!saved) return null;
+  const refGl = num(saved.value);
+  const rowGl = num(row.gl);
+  if (refGl === null || rowGl === null) return null;
+  return { ref: refGl, measured: rowGl, diff: rowGl - refGl };
+}
+
 function computeClosureAll() {
   const seen = new Map();
   rows.forEach((row) => {
@@ -1670,8 +1717,8 @@ function bindInlineModal() {
 
 // ── Selected row highlight helper ─────────────────────────────────────────
 function updateRowHighlights() {
-  document.querySelectorAll("#rows tr").forEach((tr, i) => {
-    tr.classList.toggle("selected-row", i === selected.row);
+  document.querySelectorAll("#rows tr[data-row-index]").forEach((tr) => {
+    tr.classList.toggle("selected-row", Number(tr.dataset.rowIndex) === selected.row);
   });
 }
 

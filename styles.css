@@ -763,21 +763,30 @@ label span {
   color: var(--ink);
 }
 
-/* Error trigger button in surveySummary */
-.closure-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 4px;
-  padding: 4px 10px;
-  border: 1px solid var(--accent);
-  border-radius: 20px;
-  background: #fff;
+/* Inline closure toggle (▼/▲) in point name cell */
+.closure-toggle {
+  float: right;
+  margin-left: 2px;
+  font-size: 8px;
   color: var(--accent);
-  font-size: 12px;
-  font-weight: 800;
   cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
   touch-action: manipulation;
+  line-height: 20px;
+}
+
+/* Expanded closure detail row */
+.level-table .closure-expand-row > td {
+  height: auto;
+  padding: 2px 6px 3px;
+  background: #eef4ef;
+  border-top: none;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
 .table-switch {
