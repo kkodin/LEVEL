@@ -1316,6 +1316,7 @@ function parseExcelXml(text, filename) {
       readExcelBasicSheet(values, workbook, filename);
       return;
     }
+    if (sheetName === "誤差一覧") return;
     const tableMeta = tableMetaFromSheetName(sheetName, workbook.meta.date);
     const dataRows = values.slice(1).map((line) => blankRow({
       bs: cleanCsvNumber(line[0]),
