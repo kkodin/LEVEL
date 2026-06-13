@@ -821,6 +821,8 @@ function updateLockButton() {
 
 function continueSavedWork() {
   $("#startupChoice").classList.add("hidden");
+  locked = true;
+  updateLockButton();
 }
 
 function updateStartupChoice() {
@@ -1227,7 +1229,7 @@ function looksLikeExcelXml(text) {
 }
 
 function applyImportedWorkbook(workbook) {
-  locked = false;
+  locked = true;
   updateLockButton();
   meta = workbook.meta;
   savedPoints = workbook.points;
@@ -1387,7 +1389,7 @@ function applyImportedCsv(table, filename) {
   activeTableIndex = 0;
   rows = tables[0].rows;
   savedPoints = nextPoints;
-  locked = false;
+  locked = true;
   updateLockButton();
   if (!nextMeta.date) nextMeta.date = todayString();
   meta = nextMeta;
