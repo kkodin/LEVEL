@@ -19,6 +19,7 @@ let setupComplete = false;
 let hasSavedWork = false;
 let pickerTargetRow = null;
 let expandedClosureRows = new Set();
+let locked = false;
 
 const $ = (selector) => document.querySelector(selector);
 const fields = ["bs", "ih", "fs", "gl", "point"];
@@ -319,6 +320,7 @@ function render() {
 }
 
 function selectCell(row, field) {
+  if (locked) return;
   if (field === "ih" || (field === "gl" && row > 0)) return;
   if (field === "fs" && !requireFirstBsBeforeFs()) return;
   if (field === "point") {
@@ -354,6 +356,7 @@ function writeSelectedValue(value) {
 }
 
 function finalizeSelectedValue() {
+  if (locked) return;
   if (!rows[selected.row]) rows[selected.row] = blankRow();
   if (selected.field === "point") {
     commitPointName();
@@ -376,6 +379,7 @@ function commitPointName() {
 }
 
 function appendKey(key) {
+  if (locked) return;
   if (selected.field === "point") return;
   if (key === "." && buffer.includes(".")) return;
   speakKey(key);
@@ -384,6 +388,7 @@ function appendKey(key) {
 }
 
 function toggleSign() {
+  if (locked) return;
   if (selected.field === "point") return;
   if (!buffer) buffer = rows[selected.row]?.[selected.field] || "0";
   buffer = buffer.startsWith("-") ? buffer.slice(1) : `-${buffer}`;
@@ -391,6 +396,7 @@ function toggleSign() {
 }
 
 function backspace() {
+  if (locked) return;
   if (selected.field === "point") {
     const next = ($("#activePoint").value || "").slice(0, -1);
     $("#activePoint").value = next;
@@ -402,6 +408,7 @@ function backspace() {
 }
 
 function clearBuffer() {
+  if (locked) return;
   if (selected.field === "point") {
     if (!rows[selected.row]) rows[selected.row] = blankRow();
     rows[selected.row].point = "";
@@ -418,6 +425,7 @@ function clearBuffer() {
 }
 
 function clearAllRows() {
+  if (locked) return;
   rows = [blankRow()];
   expandedClosureRows.clear();
   selected = { row: 0, field: "gl" };
@@ -428,6 +436,7 @@ function clearAllRows() {
 }
 
 function chooseBs() {
+  if (locked) return;
   finalizeSelectedValue();
   let row = selected.row;
   if (!rows[row]) row = rows.length - 1;
@@ -437,6 +446,7 @@ function chooseBs() {
 }
 
 function chooseFs() {
+  if (locked) return;
   finalizeSelectedValue();
   if (!requireFirstBsBeforeFs()) return;
   let row = selected.row;
@@ -488,6 +498,7 @@ function handlePhysicalKeyboard(event) {
   if (event.ctrlKey || event.altKey || event.metaKey) return;
   if (isTextEditingTarget(event.target)) return;
   if (!$("#startupChoice").classList.contains("hidden")) return;
+  if (locked) return;
 
   const key = event.key;
   if (/^[0-9]$/.test(key)) {
@@ -795,6 +806,19 @@ function updateSavePointButton() {
   $("#savePoint").disabled = !name || !value || (needsMeta && !hasMeta);
 }
 
+function toggleLock() {
+  locked = !locked;
+  updateLockButton();
+}
+
+function updateLockButton() {
+  const btn = $("#lockTable");
+  if (!btn) return;
+  btn.textContent = locked ? "解除" : "保護";
+  btn.classList.toggle("locked", locked);
+  document.querySelector(".table-wrap")?.classList.toggle("locked", locked);
+}
+
 function continueSavedWork() {
   $("#startupChoice").classList.add("hidden");
 }
@@ -987,6 +1011,7 @@ function bind() {
   });
   $("#tableSelect").addEventListener("change", (event) => switchTable(Number(event.target.value)));
   $("#addTable").addEventListener("click", addTable);
+  $("#lockTable").addEventListener("click", toggleLock);
   $("#csvFile").addEventListener("change", importCsv);
   document.querySelector(".keypad").addEventListener("click", (event) => {
     const button = event.target.closest("button");
@@ -1023,6 +1048,8 @@ function startNewSite() {
     $("#startupChoice").classList.add("hidden");
     setupComplete = false;
     startupImport = false;
+    locked = false;
+    updateLockButton();
     rows = [blankRow()];
     tables = [{ name: "表1", date: todayString(), rows }];
     activeTableIndex = 0;
@@ -1200,6 +1227,8 @@ function looksLikeExcelXml(text) {
 }
 
 function applyImportedWorkbook(workbook) {
+  locked = false;
+  updateLockButton();
   meta = workbook.meta;
   savedPoints = workbook.points;
   tables = workbook.tables.length ? workbook.tables : [{ name: "表1", date: todayString(), rows: [blankRow()] }];
@@ -1358,6 +1387,8 @@ function applyImportedCsv(table, filename) {
   activeTableIndex = 0;
   rows = tables[0].rows;
   savedPoints = nextPoints;
+  locked = false;
+  updateLockButton();
   if (!nextMeta.date) nextMeta.date = todayString();
   meta = nextMeta;
   selected = { row: 0, field: "gl" };
@@ -1449,6 +1480,7 @@ function download(filename, content, type) {
 
 // ── Confirm and advance (new "確定 →" button) ──────────────────────────────
 function confirmAndAdvance() {
+  if (locked) return;
   finalizeSelectedValue();
   // Decide next logical cell based on current field
   if (selected.field === "gl") {
