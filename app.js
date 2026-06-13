@@ -1137,9 +1137,10 @@ function exportExcel() {
 
 function buildExcelWorkbook() {
   const closureData = computeClosureAll();
+  const usedNames = new Set(["基本情報", "誤差一覧"]);
   const worksheets = [
     excelBasicWorksheet(),
-    ...tables.map((table, index) => excelTableWorksheet(table, index)),
+    ...tables.map((table, index) => excelTableWorksheet(table, index, usedNames)),
     ...(closureData.length ? [excelClosureWorksheet(closureData)] : [])
   ];
   return `<?xml version="1.0"?>
@@ -1171,12 +1172,12 @@ function excelBasicWorksheet() {
   return excelWorksheet("基本情報", rowsXml);
 }
 
-function excelTableWorksheet(table, index) {
+function excelTableWorksheet(table, index, usedNames) {
   const rowsXml = [
     excelRow(["BS", "IH", "FS", "GL", "測点名"].map((label) => excelStringCell(label, "Header"))),
     ...excelRowsForRows(table.rows || [blankRow()])
   ];
-  return excelWorksheet(uniqueSheetName(tableSheetTitle(table, index), index), rowsXml);
+  return excelWorksheet(uniqueSheetName(tableSheetTitle(table, index), usedNames), rowsXml);
 }
 
 function tableSheetTitle(table, index) {
@@ -1230,10 +1231,21 @@ function excelFormulaCell(formula, value) {
   return `<Cell ss:Formula="${xmlAttr(formula)}" ss:StyleID="Num"><Data ss:Type="${dataType}">${dataValue}</Data></Cell>`;
 }
 
-function uniqueSheetName(name, index) {
-  const base = sanitizeSheetName(name || `表${index + 1}`);
-  const suffix = index > 0 ? `_${index + 1}` : "";
-  return `${base.slice(0, 31 - suffix.length)}${suffix}`;
+function uniqueSheetName(name, usedNames) {
+  const base = sanitizeSheetName(name || "表");
+  let candidate = base.slice(0, 31);
+  if (!usedNames.has(candidate)) {
+    usedNames.add(candidate);
+    return candidate;
+  }
+  for (let i = 2; ; i += 1) {
+    const suffix = `_${i}`;
+    candidate = `${base.slice(0, 31 - suffix.length)}${suffix}`;
+    if (!usedNames.has(candidate)) {
+      usedNames.add(candidate);
+      return candidate;
+    }
+  }
 }
 
 function sanitizeSheetName(value) {
