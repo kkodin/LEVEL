@@ -15,7 +15,7 @@
   <body>
     <main class="app">
       <button id="edgeOpen" class="edge-open" type="button" aria-label="メニュー"></button>
-      <input id="csvFile" type="file" accept=".csv,text/csv,.xls,.xml,application/vnd.ms-excel,text/xml,application/xml" hidden>
+      <input id="csvFile" type="file" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xls,.xml,application/vnd.ms-excel,text/xml,application/xml" hidden>
 
       <!-- Startup dialog -->
       <div id="startupChoice" class="startup-choice" role="dialog" aria-label="開始方法">
@@ -193,9 +193,38 @@
             <input id="pointPickerInput" type="text" placeholder="測点名を入力">
           </div>
           <div id="pointPickerList" class="point-picker-list"></div>
+          <div class="point-picker-register">
+            <button id="pointPickerRegister" type="button" class="btn-secondary" disabled>基準点に登録して確定</button>
+          </div>
           <div class="point-picker-actions">
             <button id="pointPickerCancel" class="btn-cancel" type="button">キャンセル</button>
             <button id="pointPickerConfirm" type="button">確定</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Base point sheet: shown when a new site starts or a table is added -->
+      <div id="basePointSheet" class="point-picker hidden" role="dialog" aria-label="基準点の設定">
+        <div class="point-picker-sheet">
+          <div class="point-picker-head">
+            <span>基準点の設定</span>
+            <button id="basePointSheetClose" type="button" aria-label="閉じる">×</button>
+          </div>
+          <p id="basePointSheetHint" class="base-point-hint"></p>
+          <div id="basePointSheetList" class="point-picker-list"></div>
+          <div class="base-point-add">
+            <label>
+              <span>測点名</span>
+              <input id="basePointNewName" type="text" placeholder="KBM1">
+            </label>
+            <label>
+              <span>標高 GL</span>
+              <input id="basePointNewValue" type="text" inputmode="decimal" placeholder="10.830">
+            </label>
+            <button id="basePointAdd" type="button" disabled>基準点を追加</button>
+          </div>
+          <div class="point-picker-actions">
+            <button id="basePointSheetCancel" class="btn-cancel" type="button">あとで設定する</button>
           </div>
         </div>
       </div>

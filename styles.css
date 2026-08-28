@@ -456,6 +456,13 @@ label span {
   opacity: 0.45;
   pointer-events: none;
 }
+/* 初期設定では測定情報だけ入力させ、基準点は専用画面に任せる。 */
+.drawer.setup-mode .point-entry-fields {
+  display: none;
+}
+.drawer.setup-mode .point-entry {
+  grid-template-columns: 1fr;
+}
 .drawer-backdrop {
   position: fixed;
   inset: 0;
@@ -636,7 +643,7 @@ label span {
 }
 .point-picker-item {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   gap: 8px;
   min-height: 52px;
   padding: 8px 12px;
@@ -662,6 +669,58 @@ label span {
   border-color: #cfd8ce;
   background: #e4ece6;
   color: var(--ink);
+}
+.point-picker-register {
+  padding: 8px 12px 0;
+  flex-shrink: 0;
+}
+.point-picker-register button {
+  width: 100%;
+  min-height: 46px;
+  font-size: 15px;
+}
+.point-picker-register button:disabled {
+  border-color: #cfd8ce;
+  background: #cfd8ce;
+  color: #66756f;
+}
+
+/* ── Base point sheet (新規現場・表追加時の基準点設定) ── */
+.base-point-hint {
+  margin: 0;
+  padding: 10px 14px 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.base-point-add {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-items: end;
+  padding: 10px 12px 4px;
+  border-top: 1px solid #cfd8ce;
+  flex-shrink: 0;
+}
+.base-point-add label {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.base-point-add button {
+  grid-column: 1 / -1;
+  min-height: 46px;
+  font-size: 15px;
+}
+.base-point-add button:disabled {
+  border-color: #cfd8ce;
+  background: #cfd8ce;
+  color: #66756f;
+}
+#basePointSheet .point-picker-actions {
+  grid-template-columns: 1fr;
 }
 
 /* ── Error comparison modal ── */

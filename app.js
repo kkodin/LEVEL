@@ -18,6 +18,7 @@ let startupImport = false;
 let setupComplete = false;
 let hasSavedWork = false;
 let pickerTargetRow = null;
+let basePointSheetTarget = null;
 let expandedClosureRows = new Set();
 let locked = false;
 
@@ -190,6 +191,7 @@ function addTable() {
       tables.push({ name, date, rows: [blankRow()] });
       activeTableIndex = tables.length - 1;
       rows = tables[activeTableIndex].rows;
+      expandedClosureRows.clear();
       syncTableToLegacyMeta();
       selected = { row: 0, field: "gl" };
       buffer = "";
@@ -197,6 +199,8 @@ function addTable() {
       syncBaseInputs();
       render();
       saveSoon();
+      // 表を新設したら、その表の出発点となる基準点を続けて決めてもらう。
+      openBasePointSheet(0);
     }
   );
 }
@@ -324,17 +328,11 @@ function render() {
     });
     tbody.appendChild(tr);
     if (closure && expandedClosureRows.has(rowIndex)) {
-      const diffMm = Math.round(closure.diff * 1000);
-      const sign = diffMm >= 0 ? "+" : "";
-      const absDiff = Math.abs(closure.diff);
-      let cls = "ok";
-      if (absDiff >= 0.01) cls = "error";
-      else if (absDiff >= 0.005) cls = "warn";
       const expandTr = document.createElement("tr");
       expandTr.className = "closure-expand-row";
       const expandTd = document.createElement("td");
       expandTd.colSpan = 5;
-      expandTd.innerHTML = `既知 ${closure.ref.toFixed(3)}　測定 ${closure.measured.toFixed(3)}　誤差 <span class="closure-badge ${cls}">${sign}${diffMm} mm</span>`;
+      expandTd.innerHTML = `既知 ${closure.ref.toFixed(3)}　測定 ${closure.measured.toFixed(3)}　誤差 <span class="closure-badge ${closureClass(closure.diff)}">${signedMm(closure.diff)}</span>`;
       expandTr.appendChild(expandTd);
       tbody.appendChild(expandTr);
     }
@@ -639,6 +637,7 @@ function updateSurveySummary() {
   const firstLine = parts.join("　/　");
   const secondLine = table?.date ? `作成日：${formatSurveyDate(table.date)}` : "";
   $("#surveySummary").innerHTML = [firstLine, secondLine].filter(Boolean).map(escapeHtml).join("<br>");
+  updateClosureDisplay();
 }
 
 function normalizeDateInput(value) {
@@ -677,7 +676,7 @@ function openDrawer(mode = "normal", row = null) {
 
 function closeDrawer() {
   if (drawerMode === "setup" && !setupComplete) {
-    window.alert("測定情報と基準点を登録してください。");
+    window.alert("作成日・現場名・作業名を入力してください。");
     return;
   }
   applyBaseEntry();
@@ -728,35 +727,35 @@ function applyDrawerPointName() {
   saveSoon();
 }
 
+function registerSavedPoint(name, value) {
+  const existing = savedPoints.find((point) => point.name === name);
+  if (existing) {
+    existing.value = value;
+    return existing;
+  }
+  const point = { name, value };
+  savedPoints.push(point);
+  return point;
+}
+
 function saveCurrentPoint() {
+  // 新規現場の初期設定では測定情報だけ確定させ、基準点は専用画面で入力させる。
+  if (drawerMode === "setup") {
+    finishSetupAndChooseBasePoint();
+    return;
+  }
   const name = $("#savedPointName").value.trim();
   const value = fmtInput($("#savedPointValue").value);
   if (!name || !value) return;
   readMetaFromInputs();
-  const wasSetup = drawerMode === "setup";
   const shouldCloseAfterSave = drawerMode !== "normal";
-  const existing = savedPoints.find((point) => point.name === name);
-  if (existing) {
-    existing.value = value;
-  } else {
-    savedPoints.push({ name, value });
-  }
+  registerSavedPoint(name, value);
   if (drawerMode === "base" && drawerTargetRow !== null && rows[drawerTargetRow]) {
     rows[drawerTargetRow] = blankRow({ ...rows[drawerTargetRow], point: name, gl: value });
     selected = { row: drawerTargetRow, field: "gl" };
     buffer = value;
     drawerSaved = true;
     if (drawerTargetRow === 0) syncBaseInputs();
-  }
-  if (drawerMode === "setup") {
-    rows = [blankRow({ point: name, gl: value })];
-    tables = [{ name: meta.place || name || "表1", date: meta.date || todayString(), rows }];
-    activeTableIndex = 0;
-    selected = { row: 0, field: "bs" };
-    buffer = "";
-    drawerSaved = true;
-    setupComplete = true;
-    syncBaseInputs();
   }
   if (drawerMode === "register" && drawerTargetRow !== null && rows[drawerTargetRow]) {
     rows[drawerTargetRow].point = name;
@@ -766,11 +765,27 @@ function saveCurrentPoint() {
   }
   clearPointEntry();
   renderPointList();
-  if (wasSetup) setDrawerAccordion("points");
   render();
   saveSoon();
   if (shouldCloseAfterSave) closeDrawer();
-  if (wasSetup) selectFirstBs();
+}
+
+// 測定情報の入力が終わった時点で初期設定を確定し、基準点の選択画面へ進む。
+function finishSetupAndChooseBasePoint() {
+  readMetaFromInputs();
+  if (!$("#surveyDate").value || !$("#siteName").value.trim() || !$("#surveyPlace").value.trim()) return;
+  rows = [blankRow()];
+  tables = [{ name: meta.place || "表1", date: meta.date || todayString(), rows }];
+  activeTableIndex = 0;
+  selected = { row: 0, field: "gl" };
+  buffer = "";
+  setupComplete = true;
+  drawerSaved = true;
+  syncBaseInputs();
+  render();
+  saveSoon();
+  closeDrawer();
+  openBasePointSheet(0);
 }
 
 function recallPoint(point) {
@@ -782,6 +797,77 @@ function recallPoint(point) {
   buffer = drawerMode === "resume" ? (rows[row].bs || "") : point.value;
   drawerSaved = true;
   closeDrawer();
+  render();
+  saveSoon();
+}
+
+// ── 基準点の選択・追加画面 ─────────────────────────────────────────────────
+// 新規現場の開始時と表の追加時に開く。基準点が無ければ追加させ、あれば選ばせる。
+function openBasePointSheet(row = 0) {
+  basePointSheetTarget = row;
+  $("#basePointNewName").value = "";
+  $("#basePointNewValue").value = "";
+  updateBasePointAddButton();
+  renderBasePointSheet();
+  $("#basePointSheet").classList.remove("hidden");
+  if (!savedPoints.length) window.setTimeout(() => $("#basePointNewName").focus(), 80);
+}
+
+function closeBasePointSheet() {
+  $("#basePointSheet").classList.add("hidden");
+  basePointSheetTarget = null;
+}
+
+function renderBasePointSheet() {
+  const hint = $("#basePointSheetHint");
+  const list = $("#basePointSheetList");
+  if (!hint || !list) return;
+  hint.textContent = savedPoints.length
+    ? "この表の出発点にする基準点を選んでください。"
+    : "基準点がまだ登録されていません。下の欄から追加してください（続けて何点でも登録できます）。";
+  list.innerHTML = "";
+  savedPoints.forEach((point) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "point-picker-item";
+    button.innerHTML = `<strong>${escapeHtml(point.name)}</strong><span>GL ${escapeHtml(point.value)}</span>`;
+    button.addEventListener("click", () => applyBasePointSelection(point));
+    list.appendChild(button);
+  });
+}
+
+function updateBasePointAddButton() {
+  const button = $("#basePointAdd");
+  if (!button) return;
+  const name = $("#basePointNewName")?.value.trim();
+  const value = fmtInput($("#basePointNewValue")?.value || "");
+  button.disabled = !name || !value;
+}
+
+function addBasePointFromSheet() {
+  const name = $("#basePointNewName").value.trim();
+  const value = fmtInput($("#basePointNewValue").value);
+  if (!name || !value) return;
+  registerSavedPoint(name, value);
+  // 連続登録できるよう画面は閉じず、入力欄だけ空にする。
+  $("#basePointNewName").value = "";
+  $("#basePointNewValue").value = "";
+  updateBasePointAddButton();
+  renderBasePointSheet();
+  renderPointList();
+  renderPointSuggestions();
+  saveSoon();
+  $("#basePointNewName").focus();
+}
+
+function applyBasePointSelection(point) {
+  const row = basePointSheetTarget ?? 0;
+  closeBasePointSheet();
+  if (!rows[row]) rows[row] = blankRow();
+  rows[row] = blankRow({ ...rows[row], point: point.name, gl: point.value });
+  if (row === 0) syncBaseInputs();
+  selected = { row, field: "bs" };
+  buffer = rows[row].bs || "";
   render();
   saveSoon();
 }
@@ -844,11 +930,19 @@ function clearPointEntry() {
 }
 
 function updateSavePointButton() {
+  const button = $("#savePoint");
+  if (!button) return;
+  if (drawerMode === "setup") {
+    // 初期設定では測定情報だけ求め、基準点は次の画面で入力させる。
+    const hasMeta = $("#surveyDate").value && $("#siteName").value.trim() && $("#surveyPlace").value.trim();
+    button.innerHTML = "次へ<br>基準点";
+    button.disabled = !hasMeta;
+    return;
+  }
+  button.innerHTML = "基準点<br>追加";
   const name = $("#savedPointName")?.value.trim();
   const value = fmtInput($("#savedPointValue")?.value || "");
-  const needsMeta = drawerMode === "setup";
-  const hasMeta = $("#surveyDate").value && $("#siteName").value.trim() && $("#surveyPlace").value.trim();
-  $("#savePoint").disabled = !name || !value || (needsMeta && !hasMeta);
+  button.disabled = !name || !value;
 }
 
 function toggleLock() {
@@ -1046,8 +1140,21 @@ function bind() {
   $("#pointPickerClose").addEventListener("click", closePointPicker);
   $("#pointPickerCancel").addEventListener("click", closePointPicker);
   $("#pointPickerConfirm").addEventListener("click", () => confirmPointPicker());
-  $("#pointPickerInput").addEventListener("input", (e) => renderPointPickerList(e.target.value));
+  $("#pointPickerInput").addEventListener("input", (e) => {
+    renderPointPickerList(e.target.value);
+    updatePickerRegisterButton();
+  });
+  $("#pointPickerRegister").addEventListener("click", registerPickerPointAsBase);
   $("#pointPicker").addEventListener("click", (e) => { if (e.target === e.currentTarget) closePointPicker(); });
+  $("#basePointSheetClose").addEventListener("click", closeBasePointSheet);
+  $("#basePointSheetCancel").addEventListener("click", closeBasePointSheet);
+  $("#basePointSheet").addEventListener("click", (e) => { if (e.target === e.currentTarget) closeBasePointSheet(); });
+  $("#basePointAdd").addEventListener("click", addBasePointFromSheet);
+  $("#basePointNewName").addEventListener("input", updateBasePointAddButton);
+  $("#basePointNewValue").addEventListener("input", updateBasePointAddButton);
+  $("#basePointNewValue").addEventListener("keydown", (event) => {
+    if (event.key === "Enter") addBasePointFromSheet();
+  });
   $("#errorModalClose").addEventListener("click", closeErrorModal);
   $("#errorModal").addEventListener("click", (e) => { if (e.target === e.currentTarget) closeErrorModal(); });
   $("#errorModalCsv").addEventListener("click", exportErrorCsv);
@@ -1119,9 +1226,186 @@ function startNewSite() {
   }
 }
 
+// ── XLSX (OOXML) 出力 ──────────────────────────────────────────────────────
+// スマホのExcelはSpreadsheetML(.xls)を開けず、PCでは拡張子不一致の警告が出るため、
+// 依存ライブラリなしで実体のある .xlsx (ZIP + OOXML) を組み立てる。
+const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const XLSX_STYLE = { normal: 0, header: 1, num: 2, input: 3, text: 4 };
+
+const crcTable = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i += 1) {
+    let value = i;
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+    }
+    table[i] = value >>> 0;
+  }
+  return table;
+})();
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (let i = 0; i < bytes.length; i += 1) {
+    crc = crcTable[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+// 無圧縮(store)のZIPを組み立てる。Excel・Numbers・Googleスプレッドシートいずれも読める。
+function zipStore(entries) {
+  const encoder = new TextEncoder();
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+  entries.forEach(({ name, bytes }) => {
+    const nameBytes = encoder.encode(name);
+    const crc = crc32(bytes);
+    const local = new Uint8Array(30 + nameBytes.length + bytes.length);
+    const localView = new DataView(local.buffer);
+    localView.setUint32(0, 0x04034b50, true);
+    localView.setUint16(4, 20, true);
+    localView.setUint16(6, 0x0800, true);
+    localView.setUint16(8, 0, true);
+    localView.setUint16(10, 0, true);
+    localView.setUint16(12, 0x0021, true);
+    localView.setUint32(14, crc, true);
+    localView.setUint32(18, bytes.length, true);
+    localView.setUint32(22, bytes.length, true);
+    localView.setUint16(26, nameBytes.length, true);
+    localView.setUint16(28, 0, true);
+    local.set(nameBytes, 30);
+    local.set(bytes, 30 + nameBytes.length);
+    locals.push(local);
+
+    const central = new Uint8Array(46 + nameBytes.length);
+    const centralView = new DataView(central.buffer);
+    centralView.setUint32(0, 0x02014b50, true);
+    centralView.setUint16(4, 20, true);
+    centralView.setUint16(6, 20, true);
+    centralView.setUint16(8, 0x0800, true);
+    centralView.setUint16(10, 0, true);
+    centralView.setUint16(12, 0, true);
+    centralView.setUint16(14, 0x0021, true);
+    centralView.setUint32(16, crc, true);
+    centralView.setUint32(20, bytes.length, true);
+    centralView.setUint32(24, bytes.length, true);
+    centralView.setUint16(28, nameBytes.length, true);
+    centralView.setUint32(42, offset, true);
+    central.set(nameBytes, 46);
+    centrals.push(central);
+    offset += local.length;
+  });
+
+  const centralSize = centrals.reduce((total, part) => total + part.length, 0);
+  const end = new Uint8Array(22);
+  const endView = new DataView(end.buffer);
+  endView.setUint32(0, 0x06054b50, true);
+  endView.setUint16(8, entries.length, true);
+  endView.setUint16(10, entries.length, true);
+  endView.setUint32(12, centralSize, true);
+  endView.setUint32(16, offset, true);
+
+  const out = new Uint8Array(offset + centralSize + end.length);
+  let cursor = 0;
+  locals.forEach((part) => { out.set(part, cursor); cursor += part.length; });
+  centrals.forEach((part) => { out.set(part, cursor); cursor += part.length; });
+  out.set(end, cursor);
+  return out;
+}
+
+function columnLetter(index) {
+  return String.fromCharCode(65 + index);
+}
+
+function xlsxBlank(style = "normal") {
+  return { kind: "blank", style };
+}
+
+function xlsxText(value, style = "text") {
+  return { kind: "text", value: String(value ?? ""), style };
+}
+
+function xlsxNumber(value, style = "num") {
+  const parsed = num(value);
+  return parsed === null ? xlsxBlank(style) : { kind: "number", value: parsed, style };
+}
+
+function xlsxInteger(value, style = "normal") {
+  return Number.isFinite(value) ? { kind: "integer", value, style } : xlsxBlank(style);
+}
+
+function xlsxFormula(formula, value, style = "num") {
+  return { kind: "formula", formula, value: num(value), style };
+}
+
+function xlsxCellXml(cell, ref) {
+  const style = XLSX_STYLE[cell.style] ?? 0;
+  if (cell.kind === "text") {
+    return `<c r="${ref}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${xmlText(cell.value)}</t></is></c>`;
+  }
+  if (cell.kind === "number") {
+    return `<c r="${ref}" s="${style}"><v>${cell.value.toFixed(3)}</v></c>`;
+  }
+  if (cell.kind === "integer") {
+    return `<c r="${ref}" s="${style}"><v>${cell.value}</v></c>`;
+  }
+  if (cell.kind === "formula") {
+    // 計算済みの値もキャッシュしておく。読込時はこの値を使い、Excel は fullCalcOnLoad で再計算する。
+    const cached = cell.value === null ? "" : `<v>${cell.value.toFixed(3)}</v>`;
+    return `<c r="${ref}" s="${style}"><f>${xmlText(cell.formula)}</f>${cached}</c>`;
+  }
+  return `<c r="${ref}" s="${style}"/>`;
+}
+
+function xlsxSheetXml(sheetRows) {
+  const body = sheetRows.map((cells, rowIndex) => {
+    const rowNumber = rowIndex + 1;
+    const cellsXml = cells
+      .map((cell, columnIndex) => xlsxCellXml(cell, `${columnLetter(columnIndex)}${rowNumber}`))
+      .join("");
+    return `<row r="${rowNumber}">${cellsXml}</row>`;
+  }).join("");
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="4" width="11" customWidth="1"/><col min="5" max="5" width="20" customWidth="1"/></cols><sheetData>${body}</sheetData></worksheet>`;
+}
+
+function xlsxStylesXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="0.000"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Yu Gothic"/></font><font><b/><sz val="11"/><name val="Yu Gothic"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9D8BD"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFBC4"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="164" fontId="0" fillId="3" borderId="0" xfId="0" applyNumberFormat="1" applyFill="1"/><xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+}
+
+function xlsxPackage(sheets) {
+  const encoder = new TextEncoder();
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${sheets.map((_, index) => `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")}</Types>`;
+
+  const rootRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+
+  const workbook = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets.map((sheet, index) => `<sheet name="${xmlAttr(sheet.name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`).join("")}</sheets><calcPr calcId="0" fullCalcOnLoad="1"/></workbook>`;
+
+  const workbookRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((_, index) => `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`).join("")}<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+
+  const entries = [
+    { name: "[Content_Types].xml", bytes: encoder.encode(contentTypes) },
+    { name: "_rels/.rels", bytes: encoder.encode(rootRels) },
+    { name: "xl/workbook.xml", bytes: encoder.encode(workbook) },
+    { name: "xl/_rels/workbook.xml.rels", bytes: encoder.encode(workbookRels) },
+    { name: "xl/styles.xml", bytes: encoder.encode(xlsxStylesXml()) },
+    ...sheets.map((sheet, index) => ({
+      name: `xl/worksheets/sheet${index + 1}.xml`,
+      bytes: encoder.encode(xlsxSheetXml(sheet.rows))
+    }))
+  ];
+  return zipStore(entries);
+}
+
 function excelFilename() {
   const site = sanitizeFilename(meta.site || "現場名未入力");
-  return `${site}.xls`;
+  return `${site}.xlsx`;
 }
 
 function exportExcel() {
@@ -1131,53 +1415,54 @@ function exportExcel() {
   if (!meta.date) meta.date = todayString();
   syncMetaToInputs();
   syncActiveTable();
-  const workbook = buildExcelWorkbook();
-  download(excelFilename(), `\ufeff${workbook}`, "application/vnd.ms-excel;charset=utf-8");
+  download(excelFilename(), new Blob([buildXlsxWorkbook()], { type: XLSX_MIME }), XLSX_MIME);
 }
 
-function buildExcelWorkbook() {
+function buildXlsxWorkbook() {
   const closureData = computeClosureAll();
   const usedNames = new Set(["基本情報", "誤差一覧"]);
-  const worksheets = [
-    excelBasicWorksheet(),
-    ...tables.map((table, index) => excelTableWorksheet(table, index, usedNames)),
-    ...(closureData.length ? [excelClosureWorksheet(closureData)] : [])
+  const sheets = [
+    { name: "基本情報", rows: basicSheetRows() },
+    ...tables.map((table, index) => ({
+      name: uniqueSheetName(tableSheetTitle(table, index), usedNames),
+      rows: tableSheetRows(table)
+    })),
+    ...(closureData.length ? [{ name: "誤差一覧", rows: closureSheetRows(closureData) }] : [])
   ];
-  return `<?xml version="1.0"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
- <Styles>
-  <Style ss:ID="Header"><Font ss:Bold="1"/><Interior ss:Color="#D9D8BD" ss:Pattern="Solid"/></Style>
-  <Style ss:ID="Input"><Interior ss:Color="#FFFBC4" ss:Pattern="Solid"/></Style>
-  <Style ss:ID="Text"><NumberFormat ss:Format="@"/></Style>
-  <Style ss:ID="Num"><NumberFormat ss:Format="0.000"/></Style>
- </Styles>
- ${worksheets.join("\n")}
-</Workbook>`;
+  return xlsxPackage(sheets);
 }
 
-function excelBasicWorksheet() {
-  const rowsXml = [
-    excelRow([excelStringCell("LEVEL_APP"), excelStringCell("4")]),
-    excelRow([excelStringCell("TITLE"), excelStringCell(meta.title || "")]),
-    excelRow([excelStringCell("SITE"), excelStringCell(meta.site || "")]),
-    excelRow([]),
-    excelRow([excelStringCell("POINTS")]),
-    excelRow([excelStringCell("測点名", "Header"), excelStringCell("数値", "Header")]),
-    ...savedPoints.map((point) => excelRow([excelStringCell(point.name), excelNumberCell(point.value)]))
+function basicSheetRows() {
+  return [
+    [xlsxText("LEVEL_APP"), xlsxText("4")],
+    [xlsxText("TITLE"), xlsxText(meta.title || "")],
+    [xlsxText("SITE"), xlsxText(meta.site || "")],
+    [xlsxText("DATE"), xlsxText(meta.date || "")],
+    [xlsxText("PLACE"), xlsxText(meta.place || "")],
+    [],
+    [xlsxText("POINTS")],
+    [xlsxText("測点名", "header"), xlsxText("数値", "header")],
+    ...savedPoints.map((point) => [xlsxText(point.name), xlsxNumber(point.value)])
   ];
-  return excelWorksheet("基本情報", rowsXml);
 }
 
-function excelTableWorksheet(table, index, usedNames) {
-  const rowsXml = [
-    excelRow(["BS", "IH", "FS", "GL", "測点名"].map((label) => excelStringCell(label, "Header"))),
-    ...excelRowsForRows(table.rows || [blankRow()])
+function tableSheetRows(table) {
+  return [
+    ["BS", "IH", "FS", "GL", "測点名"].map((label) => xlsxText(label, "header")),
+    ...xlsxRowsForRows(table.rows || [blankRow()])
   ];
-  return excelWorksheet(uniqueSheetName(tableSheetTitle(table, index), usedNames), rowsXml);
+}
+
+function closureSheetRows(data) {
+  return [
+    ["測点名", "既知GL", "測定GL", "誤差(mm)"].map((label) => xlsxText(label, "header")),
+    ...data.map(({ point, ref, measured, diff }) => [
+      xlsxText(point),
+      xlsxNumber(ref),
+      xlsxNumber(measured),
+      xlsxInteger(Math.round(diff * 1000))
+    ])
+  ];
 }
 
 function tableSheetTitle(table, index) {
@@ -1186,49 +1471,27 @@ function tableSheetTitle(table, index) {
   return `${date}_${name}`;
 }
 
-function excelRowsForRows(sourceRows) {
+function xlsxRowsForRows(sourceRows) {
   const usefulRows = sourceRows.filter((row, index) => index === 0 || row.bs || row.fs || row.gl || row.point);
   const rowCount = Math.max(usefulRows.length + EXCEL_EXTRA_ROWS, EXCEL_EXTRA_ROWS + 1);
-  return Array.from({ length: rowCount }, (_, index) => excelMeasurementRow(usefulRows[index] || blankRow(), index));
+  return Array.from({ length: rowCount }, (_, index) => xlsxMeasurementRow(usefulRows[index] || blankRow(), index));
 }
 
-function excelMeasurementRow(row, index) {
+// 見出しが1行目のため、データ index 0 は Excel の 2 行目に載る。
+// 列は A=BS / B=IH / C=FS / D=GL / E=測点名。
+function xlsxMeasurementRow(row, index) {
+  const line = index + 2;
   const ihFormula = index === 0
-    ? '=IF(RC[-1]="","",RC[2]+RC[-1])'
-    : '=IF(ISNUMBER(RC[-1]),RC[-1]+RC[2],IF(AND(ISNUMBER(R[-1]C),ISNUMBER(R[1]C[1])),R[-1]C,""))';
-  const glFormula = '=IF(ISNUMBER(RC[-1]),R[-1]C[-2]-RC[-1],"")';
-  return excelRow([
-    excelNumberCell(row.bs, "Input"),
-    excelFormulaCell(ihFormula, row.ih),
-    excelNumberCell(row.fs, "Input"),
-    index > 0 ? excelFormulaCell(glFormula, row.gl) : excelNumberCell(row.gl),
-    excelStringCell(row.point || "")
-  ]);
-}
-
-function excelWorksheet(name, rowsXml) {
-  return `<Worksheet ss:Name="${xmlAttr(sanitizeSheetName(name))}"><Table>${rowsXml.join("")}</Table></Worksheet>`;
-}
-
-function excelRow(cells) {
-  return `<Row>${cells.join("")}</Row>`;
-}
-
-function excelStringCell(value, style = "Text") {
-  return `<Cell ss:StyleID="${style}"><Data ss:Type="String">${xmlText(value)}</Data></Cell>`;
-}
-
-function excelNumberCell(value, style = "Num") {
-  const parsed = num(value);
-  if (parsed === null) return `<Cell ss:StyleID="${style}"><Data ss:Type="String"></Data></Cell>`;
-  return `<Cell ss:StyleID="${style}"><Data ss:Type="Number">${parsed.toFixed(3)}</Data></Cell>`;
-}
-
-function excelFormulaCell(formula, value) {
-  const parsed = num(value);
-  const dataType = parsed === null ? "String" : "Number";
-  const dataValue = parsed === null ? "" : parsed.toFixed(3);
-  return `<Cell ss:Formula="${xmlAttr(formula)}" ss:StyleID="Num"><Data ss:Type="${dataType}">${dataValue}</Data></Cell>`;
+    ? `IF(A${line}="","",D${line}+A${line})`
+    : `IF(ISNUMBER(A${line}),A${line}+D${line},IF(AND(ISNUMBER(B${line - 1}),ISNUMBER(C${line + 1})),B${line - 1},""))`;
+  const glFormula = `IF(ISNUMBER(C${line}),B${line - 1}-C${line},"")`;
+  return [
+    xlsxNumber(row.bs, "input"),
+    xlsxFormula(ihFormula, row.ih),
+    xlsxNumber(row.fs, "input"),
+    index > 0 ? xlsxFormula(glFormula, row.gl) : xlsxNumber(row.gl),
+    xlsxText(row.point || "")
+  ];
 }
 
 function uniqueSheetName(name, usedNames) {
@@ -1264,23 +1527,165 @@ function sanitizeFilename(value) {
   return String(value || "").trim().replace(/[\\/:*?"<>|]/g, "_") || "未入力";
 }
 
+
 function importCsv(event) {
   const file = event.target.files?.[0];
   event.target.value = "";
   if (!file) return;
   if (!startupImport && !window.confirm("現在の内容を破棄してファイルを読み込みますか?")) return;
   const reader = new FileReader();
-  reader.addEventListener("load", () => {
-    const text = String(reader.result || "");
-    if (looksLikeExcelXml(text)) {
-      applyImportedWorkbook(parseExcelXml(text, file.name));
-    } else {
-      applyImportedCsv(parseCsv(text), file.name);
+  reader.addEventListener("load", async () => {
+    const bytes = new Uint8Array(reader.result || new ArrayBuffer(0));
+    try {
+      // xlsx は ZIP なので先頭が "PK"。旧形式(.xls の SpreadsheetML)と CSV はテキストとして扱う。
+      if (bytes[0] === 0x50 && bytes[1] === 0x4b) {
+        applyImportedWorkbook(await parseXlsx(bytes, file.name));
+      } else {
+        const text = new TextDecoder("utf-8").decode(bytes);
+        if (looksLikeExcelXml(text)) {
+          applyImportedWorkbook(parseExcelXml(text, file.name));
+        } else {
+          applyImportedCsv(parseCsv(text), file.name);
+        }
+      }
+    } catch (error) {
+      window.alert(`ファイルを読み込めませんでした。\n${error?.message || error}`);
+      startupImport = false;
+      return;
     }
     $("#startupChoice").classList.add("hidden");
     startupImport = false;
   });
-  reader.readAsText(file, "utf-8");
+  reader.readAsArrayBuffer(file);
+}
+
+// ── xlsx 読込 ─────────────────────────────────────────────────────────────
+async function unzip(bytes) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let eocd = -1;
+  const limit = Math.max(0, bytes.length - 22 - 65535);
+  for (let i = bytes.length - 22; i >= limit; i -= 1) {
+    if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error("xlsxとして読み取れませんでした");
+  const count = view.getUint16(eocd + 10, true);
+  const decoder = new TextDecoder("utf-8");
+  const files = new Map();
+  let pointer = view.getUint32(eocd + 16, true);
+  for (let i = 0; i < count; i += 1) {
+    if (view.getUint32(pointer, true) !== 0x02014b50) throw new Error("xlsxの索引が壊れています");
+    const method = view.getUint16(pointer + 10, true);
+    const compressedSize = view.getUint32(pointer + 20, true);
+    const nameLength = view.getUint16(pointer + 28, true);
+    const extraLength = view.getUint16(pointer + 30, true);
+    const commentLength = view.getUint16(pointer + 32, true);
+    const localOffset = view.getUint32(pointer + 42, true);
+    const name = decoder.decode(bytes.subarray(pointer + 46, pointer + 46 + nameLength));
+    const localNameLength = view.getUint16(localOffset + 26, true);
+    const localExtraLength = view.getUint16(localOffset + 28, true);
+    const dataStart = localOffset + 30 + localNameLength + localExtraLength;
+    files.set(name, { method, raw: bytes.subarray(dataStart, dataStart + compressedSize) });
+    pointer += 46 + nameLength + extraLength + commentLength;
+  }
+  return files;
+}
+
+async function zipEntryText(files, name) {
+  const entry = files.get(name);
+  if (!entry) return "";
+  if (entry.method === 0) return new TextDecoder("utf-8").decode(entry.raw);
+  if (entry.method !== 8) throw new Error("未対応の圧縮形式のxlsxです");
+  if (typeof DecompressionStream !== "function") {
+    throw new Error("このブラウザでは圧縮されたxlsxを開けません。CSVで読み込んでください。");
+  }
+  const stream = new Blob([entry.raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  return new Response(stream).text();
+}
+
+function columnIndexFromRef(ref) {
+  const letters = String(ref || "").match(/^[A-Z]+/)?.[0];
+  if (!letters) return -1;
+  return [...letters].reduce((total, char) => total * 26 + (char.charCodeAt(0) - 64), 0) - 1;
+}
+
+function xlsxSheetGrid(xml, sharedStrings) {
+  const doc = new DOMParser().parseFromString(xml, "application/xml");
+  const grid = [];
+  Array.from(doc.getElementsByTagName("row")).forEach((rowEl, order) => {
+    const rowNumber = Number(rowEl.getAttribute("r") || order + 1);
+    const values = [];
+    Array.from(rowEl.getElementsByTagName("c")).forEach((cell) => {
+      const type = cell.getAttribute("t") || "n";
+      let text = "";
+      if (type === "inlineStr") {
+        text = Array.from(cell.getElementsByTagName("t")).map((node) => node.textContent).join("");
+      } else if (type === "s") {
+        const index = Number(cell.getElementsByTagName("v")[0]?.textContent ?? -1);
+        text = sharedStrings[index] ?? "";
+      } else {
+        text = cell.getElementsByTagName("v")[0]?.textContent || "";
+      }
+      const columnIndex = columnIndexFromRef(cell.getAttribute("r"));
+      if (columnIndex < 0) {
+        values.push(text);
+        return;
+      }
+      while (values.length < columnIndex) values.push("");
+      values[columnIndex] = text;
+    });
+    while (grid.length < rowNumber - 1) grid.push([]);
+    grid[rowNumber - 1] = values;
+  });
+  return grid;
+}
+
+async function parseXlsx(bytes, filename) {
+  const files = await unzip(bytes);
+  const sharedStrings = [];
+  const sharedXml = await zipEntryText(files, "xl/sharedStrings.xml");
+  if (sharedXml) {
+    const sharedDoc = new DOMParser().parseFromString(sharedXml, "application/xml");
+    Array.from(sharedDoc.getElementsByTagName("si")).forEach((si) => {
+      sharedStrings.push(Array.from(si.getElementsByTagName("t")).map((node) => node.textContent).join(""));
+    });
+  }
+
+  const relsXml = await zipEntryText(files, "xl/_rels/workbook.xml.rels");
+  const relsDoc = new DOMParser().parseFromString(relsXml, "application/xml");
+  const targets = new Map();
+  Array.from(relsDoc.getElementsByTagName("Relationship")).forEach((rel) => {
+    targets.set(rel.getAttribute("Id"), String(rel.getAttribute("Target") || "").replace(/^\/?xl\//, ""));
+  });
+
+  const workbookXml = await zipEntryText(files, "xl/workbook.xml");
+  const workbookDoc = new DOMParser().parseFromString(workbookXml, "application/xml");
+  const sheetEls = Array.from(workbookDoc.getElementsByTagName("sheet"));
+
+  const workbook = { meta: { title: filename, site: "", date: "", place: "" }, points: [], tables: [] };
+  for (let index = 0; index < sheetEls.length; index += 1) {
+    const sheetEl = sheetEls[index];
+    const sheetName = sheetEl.getAttribute("name") || `表${index}`;
+    const relId = sheetEl.getAttribute("r:id") || sheetEl.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id");
+    const target = targets.get(relId) || `worksheets/sheet${index + 1}.xml`;
+    const sheetXml = await zipEntryText(files, `xl/${target}`);
+    if (!sheetXml) continue;
+    const values = xlsxSheetGrid(sheetXml, sharedStrings);
+    if (index === 0 || sheetName === "基本情報") {
+      readExcelBasicSheet(values, workbook, filename);
+      continue;
+    }
+    if (sheetName === "誤差一覧") continue;
+    const tableMeta = tableMetaFromSheetName(sheetName, workbook.meta.date);
+    const dataRows = values.slice(1).map((line) => blankRow({
+      bs: cleanCsvNumber(line[0]),
+      ih: cleanCsvNumber(line[1]),
+      fs: cleanCsvNumber(line[2]),
+      gl: cleanCsvNumber(line[3]),
+      point: line[4] || ""
+    })).filter(rowHasWork);
+    workbook.tables.push({ name: tableMeta.name, date: tableMeta.date, rows: normalizeImportedRows(dataRows) });
+  }
+  return workbook;
 }
 
 function looksLikeExcelXml(text) {
@@ -1531,13 +1936,18 @@ function stripBom(value) {
 }
 
 function download(filename, content, type) {
-  const blob = new Blob([content], { type });
+  const blob = content instanceof Blob ? content : new Blob([content], { type });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
+  link.rel = "noopener";
+  // iOS/Android のブラウザは document に無いリンクのクリックを無視することがある。
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(url);
+  document.body.removeChild(link);
+  // 保存処理が走り切る前に revoke するとスマホでファイルが壊れるため遅らせる。
+  window.setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
 // ── Confirm and advance (new "確定 →" button) ──────────────────────────────
@@ -1572,6 +1982,19 @@ function confirmAndAdvance() {
 }
 
 // ── Closure difference (閉合差) ────────────────────────────────────────────
+// 誤差は現場で読みやすいよう mm 単位・符号付きで統一して表示する。
+function signedMm(diff) {
+  const mm = Math.round(diff * 1000);
+  return `${mm >= 0 ? "+" : "-"}${Math.abs(mm)} mm`;
+}
+
+function closureClass(diff) {
+  const absDiff = Math.abs(diff);
+  if (absDiff >= 0.01) return "error";
+  if (absDiff >= 0.005) return "warn";
+  return "ok";
+}
+
 function closureForRow(row) {
   if (!row.point || !row.gl) return null;
   const saved = savedPoints.find((p) => p.name === row.point);
@@ -1603,16 +2026,11 @@ function updateClosureDisplay() {
   if (!results.length || !summary) return;
 
   const worst = results.reduce((a, b) => Math.abs(b.diff) > Math.abs(a.diff) ? b : a);
-  const absDiff = Math.abs(worst.diff);
-  let cls = "ok";
-  if (absDiff >= 0.01) cls = "error";
-  else if (absDiff >= 0.005) cls = "warn";
-  const sign = worst.diff >= 0 ? "+" : "";
 
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "closure-trigger";
-  btn.innerHTML = `既知点との誤差　<span class="closure-badge ${cls}">${sign}${worst.diff.toFixed(3)} m</span>`;
+  btn.innerHTML = `既知点との誤差　<span class="closure-badge ${closureClass(worst.diff)}">${signedMm(worst.diff)}</span>`;
   btn.addEventListener("click", openErrorModal);
   summary.appendChild(btn);
 }
@@ -1622,6 +2040,7 @@ function openPointPicker(row) {
   pickerTargetRow = row;
   $("#pointPickerInput").value = rows[row]?.point || "";
   renderPointPickerList("");
+  updatePickerRegisterButton();
   $("#pointPicker").classList.remove("hidden");
   window.setTimeout(() => $("#pointPickerInput").focus(), 80);
 }
@@ -1635,11 +2054,13 @@ function renderPointPickerList(query) {
   const list = $("#pointPickerList");
   if (!list) return;
   list.innerHTML = "";
+  // 今回の測定値。登録済み基準点との誤差をその場で見せるために使う。
+  const measured = num(rows[pickerTargetRow]?.gl);
   const q = String(query || "").toLowerCase();
   const filtered = savedPoints.filter((p) => !q || p.name.toLowerCase().includes(q));
   if (!filtered.length) {
     const msg = document.createElement("p");
-    msg.textContent = savedPoints.length ? "一致する測点なし" : "登録済み測点なし";
+    msg.textContent = savedPoints.length ? "一致する測点なし" : "登録済み基準点なし";
     list.appendChild(msg);
     return;
   }
@@ -1647,10 +2068,36 @@ function renderPointPickerList(query) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "point-picker-item";
-    btn.innerHTML = `<strong>${escapeHtml(point.name)}</strong><span>GL ${escapeHtml(point.value)}</span>`;
+    const ref = num(point.value);
+    const diff = measured !== null && ref !== null ? measured - ref : null;
+    const badge = diff === null
+      ? ""
+      : `<span class="closure-badge ${closureClass(diff)}">${signedMm(diff)}</span>`;
+    btn.innerHTML = `<strong>${escapeHtml(point.name)}</strong><span>既知 ${escapeHtml(point.value)}</span>${badge}`;
     btn.addEventListener("click", () => confirmPointPicker(point.name));
     list.appendChild(btn);
   });
+}
+
+function updatePickerRegisterButton() {
+  const button = $("#pointPickerRegister");
+  if (!button) return;
+  const name = $("#pointPickerInput")?.value.trim();
+  const value = fmtInput(rows[pickerTargetRow]?.gl || "");
+  const known = savedPoints.some((point) => point.name === name);
+  button.textContent = known ? "基準点を更新して確定" : "基準点に登録して確定";
+  button.disabled = !name || !value;
+}
+
+// 測定結果に付けた測点名を、その測定値ごと基準点一覧へ登録する。
+function registerPickerPointAsBase() {
+  const row = pickerTargetRow;
+  if (row === null) return;
+  const name = $("#pointPickerInput").value.trim();
+  const value = fmtInput(rows[row]?.gl || "");
+  if (!name || !value) return;
+  registerSavedPoint(name, value);
+  confirmPointPicker(name);
 }
 
 function confirmPointPicker(name) {
@@ -1662,6 +2109,8 @@ function confirmPointPicker(name) {
   selected = { row, field: "point" };
   buffer = n;
   $("#activePoint").value = n;
+  // 登録済み基準点を選んだときは誤差をすぐ確認できるよう開いておく。
+  if (savedPoints.some((point) => point.name === n)) expandedClosureRows.add(row);
   render();
   saveSoon();
   chooseFs();
@@ -1674,21 +2123,14 @@ function openErrorModal() {
   if (!results.length) {
     body.innerHTML = "<p>既知点との照合データがありません</p>";
   } else {
-    const rowsHtml = results.map(({ point, ref, measured, diff }) => {
-      const absDiff = Math.abs(diff);
-      let cls = "ok";
-      if (absDiff >= 0.01) cls = "error";
-      else if (absDiff >= 0.005) cls = "warn";
-      const sign = diff >= 0 ? "+" : "";
-      return `<tr>
+    const rowsHtml = results.map(({ point, ref, measured, diff }) => `<tr>
         <td>${escapeHtml(point)}</td>
         <td>${ref.toFixed(3)}</td>
         <td>${measured.toFixed(3)}</td>
-        <td><span class="closure-badge ${cls}">${sign}${diff.toFixed(3)}</span></td>
-      </tr>`;
-    }).join("");
+        <td><span class="closure-badge ${closureClass(diff)}">${signedMm(diff)}</span></td>
+      </tr>`).join("");
     body.innerHTML = `<table class="error-table">
-      <thead><tr><th>測点名</th><th>既知GL</th><th>測定GL</th><th>誤差</th></tr></thead>
+      <thead><tr><th>測点名</th><th>既知GL</th><th>測定GL</th><th>誤差(mm)</th></tr></thead>
       <tbody>${rowsHtml}</tbody>
     </table>`;
   }
@@ -1702,10 +2144,10 @@ function closeErrorModal() {
 function exportErrorCsv() {
   const results = computeClosureAll();
   if (!results.length) return;
-  const header = "測点名,既知GL,測定GL,誤差\n";
+  const header = "測点名,既知GL,測定GL,誤差(mm)\n";
   const body = results.map(({ point, ref, measured, diff }) => {
-    const sign = diff >= 0 ? "+" : "";
-    return `${point},${ref.toFixed(3)},${measured.toFixed(3)},${sign}${diff.toFixed(3)}`;
+    const mm = Math.round(diff * 1000);
+    return `${point},${ref.toFixed(3)},${measured.toFixed(3)},${mm >= 0 ? "+" : "-"}${Math.abs(mm)}`;
   }).join("\n");
   const site = sanitizeFilename(meta.site || "現場名未入力");
   download(`${site}_誤差一覧.csv`, `﻿${header}${body}`, "text/csv;charset=utf-8");
@@ -1714,33 +2156,9 @@ function exportErrorCsv() {
 function exportErrorExcel() {
   const results = computeClosureAll();
   if (!results.length) return;
-  const ws = excelClosureWorksheet(results);
-  const workbook = `<?xml version="1.0"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">
- <Styles>
-  <Style ss:ID="Header"><Font ss:Bold="1"/><Interior ss:Color="#D9D8BD" ss:Pattern="Solid"/></Style>
-  <Style ss:ID="Text"><NumberFormat ss:Format="@"/></Style>
-  <Style ss:ID="Num"><NumberFormat ss:Format="0.000"/></Style>
- </Styles>
- ${ws}
-</Workbook>`;
+  const workbook = xlsxPackage([{ name: "誤差一覧", rows: closureSheetRows(results) }]);
   const site = sanitizeFilename(meta.site || "現場名未入力");
-  download(`${site}_誤差一覧.xls`, `﻿${workbook}`, "application/vnd.ms-excel;charset=utf-8");
-}
-
-function excelClosureWorksheet(data) {
-  const headers = ["測点名", "既知GL", "測定GL", "誤差"].map((h) => excelStringCell(h, "Header"));
-  const dataRows = data.map(({ point, ref, measured, diff }) => excelRow([
-    excelStringCell(point),
-    excelNumberCell(ref),
-    excelNumberCell(measured),
-    excelNumberCell(diff)
-  ]));
-  return excelWorksheet("誤差一覧", [excelRow(headers), ...dataRows]);
+  download(`${site}_誤差一覧.xlsx`, new Blob([workbook], { type: XLSX_MIME }), XLSX_MIME);
 }
 
 // ── Inline modal (replaces window.prompt / window.confirm) ────────────────
