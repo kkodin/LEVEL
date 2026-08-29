@@ -371,8 +371,14 @@ label span {
 }
 
 /* ── Keypad ──
-   3列の数字ブロック＋右端1列の機能キー。↑↓ は4列目だけの独立行に置き、
-   左3列はそのぶん空ける（BS/FS 行と機能キー列の高さを揃えるため）。 */
+   4列5行のグリッド。下2行は 0 と . を縦2行ぶんに伸ばし、
+   その右に ↑/BS と ↓/FS を積む（空きマスを作らない）。
+
+     7   8   9   C
+     4   5   6   ⌫
+     1   2   3   +/-
+    [0] [ . ]  ↑   ↓
+    [ ] [   ]  BS  FS                                            */
 .keypad {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -392,21 +398,22 @@ label span {
   background: var(--accent);
   color: #fff;
 }
-.keypad .keypad-nav {
-  display: grid;
-  grid-column: 4;
-  grid-row: 4;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
+.keypad .key-zero,
+.keypad .key-dot {
+  grid-row: 4 / span 2;
 }
-.keypad .keypad-nav .btn-nav {
-  min-height: 38px;
+.keypad .key-zero { grid-column: 1; }
+.keypad .key-dot { grid-column: 2; }
+.keypad .btn-nav {
   border-color: #cfd8ce;
   background: #f8fbf8;
   color: var(--ink);
   font-size: 18px;
 }
-.keypad .keypad-last { grid-row: 5; }
+.keypad #prevRow { grid-column: 3; grid-row: 4; }
+.keypad #nextRow { grid-column: 4; grid-row: 4; }
+.keypad #modeBs { grid-column: 3; grid-row: 5; }
+.keypad #modeFs { grid-column: 4; grid-row: 5; }
 .keypad button.active-mode {
   outline: 4px solid #111;
   outline-offset: -4px;

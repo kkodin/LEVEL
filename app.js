@@ -514,7 +514,8 @@ function appendKey(key) {
   clickTone();
   resetLeaveConfirm();
   entryDirty = true;
-  buffer = buffer === "0" ? key : `${buffer}${key}`;
+  // 先頭の0は次の数字で置き換える。ただし「0.」はそのまま残す。
+  buffer = buffer === "0" && key !== "." ? key : `${buffer}${key}`;
   writeSelectedValue(buffer);
 }
 
