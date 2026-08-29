@@ -1,7 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#07866f"/>
-  <path d="M122 336h268v44H122z" fill="#fff"/>
-  <path d="M162 138h188v54H162z" fill="#fff"/>
-  <path d="M206 192h100l36 144h-44l-12-48h-60l-12 48h-44z" fill="#fff"/>
-  <path d="M236 248h40l-12-48h-16z" fill="#07866f"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#07866f"/>
+  <g fill="#fff" font-family="'Yu Gothic','YuGothic','Hiragino Sans','Noto Sans JP','Meiryo',sans-serif" font-weight="700" text-anchor="middle">
+    <text x="256" y="212" font-size="150">Level</text>
+    <rect x="90" y="248" width="332" height="15" rx="7.5"/>
+    <text x="256" y="392" font-size="125">野帳</text>
+  </g>
 </svg>
