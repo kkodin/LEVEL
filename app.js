@@ -25,10 +25,8 @@ let locked = false;
 const DECIMALS = 3;
 let rejectFlashTimer = null;
 let audioCtx = null;
-const READBACK_DELAY = 900;
-let readbackTimer = null;
-let lastSpoken = "";
 let entryDirty = false;
+let leaveConfirmPending = false;
 let ttsWarmed = false;
 
 const $ = (selector) => document.querySelector(selector);
@@ -390,6 +388,9 @@ function selectCell(row, field) {
     openBasePointSheet(0, !hasBasePoint(0));
     return;
   }
+  // 別のセルへ移るときも、まず今のセルの値を読み上げて一度止める。
+  if ((row !== selected.row || field !== selected.field) && !confirmLeaveCell()) return;
+  entryDirty = false;
   if (field === "fs" && !requireFirstBsBeforeFs()) return;
   if (field === "point") {
     selected = { row, field };
@@ -434,9 +435,6 @@ function finalizeSelectedValue() {
   rows[selected.row][selected.field] = normalized;
   buffer = normalized;
   if (selected.row === 0 && selected.field === "gl") $("#baseGl").value = normalized;
-  cancelReadback();
-  // 自分で打ち込んだ値だけを確認読みする。読み上げ済みと同じ値なら繰り返さない。
-  if (entryDirty && normalized && fmtInput(lastSpoken) !== normalized) speakDigits(normalized);
   entryDirty = false;
   render();
   saveSoon();
@@ -499,10 +497,10 @@ function appendKey(key) {
   if (key !== "." && decimalsOf(buffer) >= DECIMALS) { rejectInput(); return; }
   warmUpSpeech();
   clickTone();
+  resetLeaveConfirm();
   entryDirty = true;
   buffer = buffer === "0" ? key : `${buffer}${key}`;
   writeSelectedValue(buffer);
-  scheduleReadback();
 }
 
 function toggleSign() {
@@ -510,11 +508,11 @@ function toggleSign() {
   if (selected.field === "point") return;
   if (isBasePointCell(selected.row, selected.field)) return;
   clickTone();
+  resetLeaveConfirm();
   entryDirty = true;
   if (!buffer) buffer = rows[selected.row]?.[selected.field] || "0";
   buffer = buffer.startsWith("-") ? buffer.slice(1) : `-${buffer}`;
   writeSelectedValue(buffer);
-  scheduleReadback();
 }
 
 function backspace() {
@@ -527,10 +525,10 @@ function backspace() {
     return;
   }
   clickTone();
+  resetLeaveConfirm();
   entryDirty = true;
   buffer = buffer.slice(0, -1);
   writeSelectedValue(buffer);
-  scheduleReadback();
 }
 
 function clearBuffer() {
@@ -543,7 +541,7 @@ function clearBuffer() {
     buffer = "";
   } else {
     clickTone();
-    cancelReadback();
+    resetLeaveConfirm();
     entryDirty = false;
     buffer = "";
     writeSelectedValue("");
@@ -578,6 +576,7 @@ function lastFilledFsRow() {
 
 function chooseBs() {
   if (locked) return;
+  if (!confirmLeaveCell()) return;
   finalizeSelectedValue();
   const row = lastFilledFsRow() + 1;
   if (!rows[row]) rows[row] = blankRow();
@@ -589,6 +588,7 @@ function chooseBs() {
 
 function chooseFs() {
   if (locked) return;
+  if (!confirmLeaveCell()) return;
   finalizeSelectedValue();
   if (!requireFirstBsBeforeFs()) return;
   // 0行目は基準点行でFSを持たないため、FSの選択は1行目以降に限る。
@@ -601,6 +601,7 @@ function chooseFs() {
 }
 
 function moveRow(delta) {
+  if (!confirmLeaveCell()) return;
   finalizeSelectedValue();
   const nextRow = Math.max(0, Math.min(rows.length - 1, selected.row + delta));
   selected = { row: nextRow, field: selected.field };
@@ -611,6 +612,7 @@ function moveRow(delta) {
 }
 
 function moveField(delta) {
+  if (!confirmLeaveCell()) return;
   finalizeSelectedValue();
   const editableFields = selected.row === 0 ? ["bs", "fs"] : ["bs", "fs", "point"];
   const index = editableFields.indexOf(selected.field);
@@ -662,19 +664,30 @@ function speakDigits(value) {
   utterance.rate = 1.1;
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(utterance);
-  lastSpoken = text;
 }
 
-// 連打中は読み上げず、手が止まってから読む。
-function scheduleReadback() {
-  window.clearTimeout(readbackTimer);
-  readbackTimer = window.setTimeout(() => {
-    if (entryDirty) speakDigits(buffer);
-  }, READBACK_DELAY);
+// セルから離れる操作の1回目では移動せず、そのセルの数値を読み上げて止める。
+// もう一度離れる操作をされたら「聞いて問題なかった」と判断して移動を通す。
+// 戻り値 true = 移動してよい、false = 今回は読み上げだけで止める。
+function confirmLeaveCell() {
+  if (locked) return true;
+  if (!("speechSynthesis" in window)) return true;
+  if (leaveConfirmPending) { leaveConfirmPending = false; return true; }
+  // 自分で打ち込んだ数値セルだけ確認する。触っていないセルは素通りさせる。
+  if (!entryDirty) return true;
+  if (selected.field === "point") return true;
+  if (isBasePointCell(selected.row, selected.field)) return true;
+  const raw = buffer || rows[selected.row]?.[selected.field] || "";
+  if (!raw) return true;
+  leaveConfirmPending = true;
+  speakDigits(fmtInput(raw) || raw);
+  return false;
 }
 
-function cancelReadback() {
-  window.clearTimeout(readbackTimer);
+// 入力し直したら確認待ちは解除する（読み上げ中なら止める）。
+function resetLeaveConfirm() {
+  leaveConfirmPending = false;
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
 }
 
 // TTSは初回の起動が特に遅いので、最初の打鍵で無音の空読みをして暖めておく。
