@@ -9,20 +9,29 @@
 
 - リモート: https://github.com/kkodin/LEVEL.git (branch: `main`)
 - **作業リポジトリ（ここでコミット・push する）**: `C:\Users\mande\開発\LEVEL`
-- **バージョン保管庫（Dropbox・git管理外）**: `C:\Users\mande\Dropbox\Documents\GITHUB\LEVEL\LEVEL_vrNNN`
+- **バージョン保管庫（Dropbox・git管理外）**: `C:\Users\mande\Dropbox\Documents\GITHUB\LEVEL\`
+
+**詳細な引継ぎは [仕様書.md](仕様書.md) を読むこと。** このファイルはその要約。
 
 ## 作業ルール（必須）
 
+保管庫の構成:
+
+```
+Dropbox\Documents\GITHUB\LEVEL\
+  LEVEL_vrNNN\      ← 最新のスナップショット（直下には1つだけ）
+  OLD\              ← 旧バージョンのフォルダはここへ移す
+```
+
 **大規模な改善・改修ごとに**、以下の順で進めること。小さな修正では版を切らず、作業リポジトリで直接コミットしてよい。
 
-1. 直前の状態を Dropbox にスナップショットする
-   `C:\Users\mande\Dropbox\Documents\GITHUB\LEVEL\LEVEL_vrNNN\` を新規作成し、
-   作業リポジトリの `.git` を除く全ファイルをコピーする
-2. スナップショットに `VERSION.txt` を置き、対応コミットハッシュと変更概要を記録する
-3. 作業リポジトリ `C:\Users\mande\開発\LEVEL` で改修する
-4. ブラウザで動作確認する
-5. ユーザーに確認する
-6. **ユーザーが明示的に「pushして」と言った時だけ** `git push origin main` する
+1. 直下にある既存の `LEVEL_vrNNN` を `OLD\` へ移動する
+2. `LEVEL_vr(NNN+1)\` を直下に新規作成し、作業リポジトリの `.git` を除く全ファイルをコピーする
+3. スナップショットに `VERSION.txt` を置き、対応コミットハッシュと変更概要を記録する
+4. 作業リポジトリ `C:\Users\mande\開発\LEVEL` で改修する
+5. ブラウザで動作確認する
+6. ユーザーに確認する
+7. **ユーザーが明示的に「pushして」と言った時だけ** `git push origin main` する
 
 ### 版番号
 
@@ -54,7 +63,7 @@ git 操作は必ず `C:\Users\mande\開発\LEVEL` で行う。
 ファイルを変更したら必ず `service-worker.js` 先頭のキャッシュ名を上げること。
 
 ```javascript
-const CACHE_NAME = "level-book-vr0005";  // 番号を上げる
+const CACHE_NAME = "level-book-vr0006";  // 番号を上げる
 ```
 
 上げないとユーザーのブラウザに古いキャッシュが残り続ける。
