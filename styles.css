@@ -64,8 +64,8 @@ input:focus {
   width: min(420px, 100%);
   min-height: 100vh;
   margin: 0 auto;
-  /* entry-panel height increased by ~46px for confirm button row */
-  padding: 2px 10px 294px 18px;
+  /* 下部固定の入力パネル（読み取り行＋キーパッド5行）の高さぶん空ける */
+  padding: 2px 10px 300px 18px;
   background: #eef4ef;
 }
 .drawer-head p {
@@ -370,7 +370,9 @@ label span {
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Keypad ── */
+/* ── Keypad ──
+   3列の数字ブロック＋右端1列の機能キー。↑↓ は4列目だけの独立行に置き、
+   左3列はそのぶん空ける（BS/FS 行と機能キー列の高さを揃えるため）。 */
 .keypad {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -384,40 +386,48 @@ label span {
   background: #f8fbf8;
   color: var(--ink);
 }
-.keypad button[data-action] {
+.keypad button[data-action],
+.keypad .btn-mode {
   border-color: var(--accent);
   background: var(--accent);
   color: #fff;
 }
-
-/* Mode row: BS / FS / navigate / confirm */
-.mode-row {
+.keypad .keypad-nav {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr 2fr;
+  grid-column: 4;
+  grid-row: 4;
+  grid-template-columns: 1fr 1fr;
   gap: 6px;
-  margin-bottom: 6px;
 }
-.mode-row button {
-  min-height: 42px;
-  padding: 0;
-  font-size: 15px;
-}
-.mode-row .btn-nav {
+.keypad .keypad-nav .btn-nav {
+  min-height: 38px;
   border-color: #cfd8ce;
-  background: #e4ece6;
+  background: #f8fbf8;
   color: var(--ink);
   font-size: 18px;
 }
-.mode-row .btn-confirm {
-  background: #0f1c54;
-  border-color: #0f1c54;
-  color: #fff;
-  font-size: 15px;
-  letter-spacing: 0.03em;
-}
+.keypad .keypad-last { grid-row: 5; }
 .keypad button.active-mode {
   outline: 4px solid #111;
   outline-offset: -4px;
+}
+
+/* 入力拒否（小数点以下4桁目など）の画面点滅 */
+@keyframes input-reject-flash {
+  0% { opacity: 0; }
+  25% { opacity: 1; }
+  55% { opacity: 0.15; }
+  75% { opacity: 0.9; }
+  100% { opacity: 0; }
+}
+body.input-reject::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #d62828;
+  pointer-events: none;
+  animation: input-reject-flash 0.42s ease-in-out;
 }
 
 .save-state {

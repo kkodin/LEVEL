@@ -21,6 +21,9 @@ let pickerTargetRow = null;
 let basePointSheetTarget = null;
 let expandedClosureRows = new Set();
 let locked = false;
+const DECIMALS = 3;
+let rejectFlashTimer = null;
+let audioCtx = null;
 
 const $ = (selector) => document.querySelector(selector);
 const fields = ["bs", "ih", "fs", "gl", "point"];
@@ -287,6 +290,15 @@ function requireFirstBsBeforeFs() {
   return false;
 }
 
+// 数値セルは常に小数点3桁で表示する。ただし編集中のセルだけは
+// 入力途中の値をそのまま見せる（打っている桁が見えなくなるため）。
+function cellDisplay(row, field, rowIndex) {
+  const raw = row[field] || "";
+  if (field === "point") return raw;
+  if (selected.row === rowIndex && selected.field === field) return buffer || raw;
+  return raw === "" ? "" : fmtInput(raw) || raw;
+}
+
 function render() {
   calculate();
   syncBaseInputs();
@@ -321,7 +333,7 @@ function render() {
         });
         td.appendChild(toggle);
       } else {
-        td.textContent = row[field] || "";
+        td.textContent = cellDisplay(row, field, rowIndex);
       }
       td.addEventListener("click", () => selectCell(rowIndex, field));
       tr.appendChild(td);
@@ -421,10 +433,52 @@ function commitPointName() {
   saveSoon();
 }
 
+// 小数点以下の桁数（小数点が無ければ 0）
+function decimalsOf(value) {
+  const text = String(value ?? "");
+  const dot = text.indexOf(".");
+  return dot < 0 ? 0 : text.length - dot - 1;
+}
+
+// 受け付けられない入力を画面の点滅とブザー（＋振動）で知らせる。
+function rejectInput() {
+  buzz();
+  const body = document.body;
+  body.classList.remove("input-reject");
+  void body.offsetWidth; // アニメーションを毎回やり直すためリフローさせる
+  body.classList.add("input-reject");
+  window.clearTimeout(rejectFlashTimer);
+  rejectFlashTimer = window.setTimeout(() => body.classList.remove("input-reject"), 460);
+}
+
+function buzz() {
+  if (navigator.vibrate) navigator.vibrate([90, 60, 90]);
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "square";
+    osc.frequency.value = 190;
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    const t = audioCtx.currentTime;
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.22, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+    osc.start(t);
+    osc.stop(t + 0.25);
+  } catch (error) {
+    /* 音を鳴らせない環境では点滅と振動だけで知らせる */
+  }
+}
+
 function appendKey(key) {
   if (locked) return;
   if (selected.field === "point") return;
-  if (key === "." && buffer.includes(".")) return;
+  if (key === "." && buffer.includes(".")) { rejectInput(); return; }
+  // 小数点以下は3桁まで。4桁目は受け付けない。
+  if (key !== "." && decimalsOf(buffer) >= DECIMALS) { rejectInput(); return; }
   speakKey(key);
   buffer = buffer === "0" ? key : `${buffer}${key}`;
   writeSelectedValue(buffer);
@@ -478,22 +532,32 @@ function clearAllRows() {
   saveSoon();
 }
 
+// FS列に数値が入っている最下段の行番号を返す（1件も無ければ -1）。
+// BS/FS ボタンはこの「すぐ一つ下の行」＝次に記入すべき行を選択する。
+function lastFilledFsRow() {
+  for (let i = rows.length - 1; i >= 0; i -= 1) {
+    if (num(rows[i]?.fs) !== null) return i;
+  }
+  return -1;
+}
+
 function chooseBs() {
   if (locked) return;
   finalizeSelectedValue();
-  let row = selected.row;
-  if (!rows[row]) row = rows.length - 1;
-  selected = { row: Math.max(0, row), field: "bs" };
-  buffer = rows[selected.row]?.bs || "";
+  const row = lastFilledFsRow() + 1;
+  if (!rows[row]) rows[row] = blankRow();
+  selected = { row, field: "bs" };
+  buffer = rows[row].bs || "";
   render();
+  saveSoon();
 }
 
 function chooseFs() {
   if (locked) return;
   finalizeSelectedValue();
   if (!requireFirstBsBeforeFs()) return;
-  let row = selected.row;
-  if (selected.field === "bs" || rows[row]?.fs) row += 1;
+  // 0行目は基準点行でFSを持たないため、FSの選択は1行目以降に限る。
+  const row = Math.max(lastFilledFsRow() + 1, 1);
   if (!rows[row]) rows[row] = blankRow();
   selected = { row, field: "fs" };
   buffer = rows[row].fs || "";
@@ -1130,7 +1194,6 @@ function bind() {
   $("#modeFs").addEventListener("click", chooseFs);
   $("#prevRow").addEventListener("click", () => moveRow(-1));
   $("#nextRow").addEventListener("click", () => moveRow(1));
-  $("#confirmEntry").addEventListener("click", confirmAndAdvance);
   $("#allClearButton").addEventListener("click", () => showConfirmModal(
     "入力内容を消去",
     "BS・FS・GL・測点名をすべて消去してよいですか？",
@@ -1177,8 +1240,6 @@ function bind() {
     if (button.dataset.action === "back") backspace();
     if (button.dataset.action === "clear") clearBuffer();
     if (button.dataset.action === "all-clear") clearAllRows();
-    if (button.dataset.action === "left") moveField(-1);
-    if (button.dataset.action === "right") moveField(1);
   });
 }
 
@@ -1948,37 +2009,6 @@ function download(filename, content, type) {
   document.body.removeChild(link);
   // 保存処理が走り切る前に revoke するとスマホでファイルが壊れるため遅らせる。
   window.setTimeout(() => URL.revokeObjectURL(url), 10000);
-}
-
-// ── Confirm and advance (new "確定 →" button) ──────────────────────────────
-function confirmAndAdvance() {
-  if (locked) return;
-  finalizeSelectedValue();
-  // Decide next logical cell based on current field
-  if (selected.field === "gl") {
-    // row 0 GL confirmed → move to BS
-    selected = { row: 0, field: "bs" };
-    buffer = rows[0]?.bs || "";
-  } else if (selected.field === "bs") {
-    // BS confirmed → move to FS of next row
-    chooseFs();
-    return;
-  } else if (selected.field === "fs") {
-    // FS confirmed → point name of same row
-    if (!rows[selected.row]) rows[selected.row] = blankRow();
-    const row = selected.row;
-    selected = { row, field: "point" };
-    buffer = rows[row]?.point || "";
-    render();
-    openPointDrawer(row);
-    return;
-  } else if (selected.field === "point") {
-    // Point confirmed → BS mode, advance to next row
-    commitPointName();
-    chooseFs();
-    return;
-  }
-  render();
 }
 
 // ── Closure difference (閉合差) ────────────────────────────────────────────

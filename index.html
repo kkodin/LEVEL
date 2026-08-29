@@ -151,15 +151,6 @@
           <button id="allClearButton" class="all-clear-button" type="button" data-action="all-clear">AC</button>
         </div>
 
-        <!-- Mode row: BS / FS / up / down / confirm -->
-        <div class="mode-row">
-          <button id="modeBs" type="button">BS</button>
-          <button id="modeFs" type="button">FS</button>
-          <button id="prevRow" class="btn-nav" type="button">↑</button>
-          <button id="nextRow" class="btn-nav" type="button">↓</button>
-          <button id="confirmEntry" class="btn-confirm" type="button">確定 →</button>
-        </div>
-
         <div class="keypad">
           <button type="button" data-key="7">7</button>
           <button type="button" data-key="8">8</button>
@@ -173,10 +164,14 @@
           <button type="button" data-key="2">2</button>
           <button type="button" data-key="3">3</button>
           <button type="button" data-action="sign">+/-</button>
-          <button type="button" data-key="0">0</button>
-          <button type="button" data-key=".">.</button>
-          <button type="button" data-action="left">←</button>
-          <button type="button" data-action="right">→</button>
+          <div class="keypad-nav">
+            <button id="prevRow" class="btn-nav" type="button">↑</button>
+            <button id="nextRow" class="btn-nav" type="button">↓</button>
+          </div>
+          <button class="keypad-last" type="button" data-key="0">0</button>
+          <button class="keypad-last" type="button" data-key=".">.</button>
+          <button id="modeBs" class="keypad-last btn-mode" type="button">BS</button>
+          <button id="modeFs" class="keypad-last btn-mode" type="button">FS</button>
         </div>
       </section>
 
