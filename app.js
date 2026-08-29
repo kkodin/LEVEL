@@ -34,7 +34,14 @@ const fields = ["bs", "ih", "fs", "gl", "point"];
 const EXCEL_EXTRA_ROWS = 30;
 
 function blankRow(seed = {}) {
-  return { bs: "", ih: "", fs: "", gl: "", point: "", ...seed };
+  // isBase: その行のGLが「計算結果」ではなく「新たに置いた基準高」であることの印。
+  // 行0は常に基準行なので印は不要。
+  return { bs: "", ih: "", fs: "", gl: "", point: "", isBase: false, ...seed };
+}
+
+// 行0、または基準高を置き直した行か
+function isBaseRow(row) {
+  return row === 0 || rows[row]?.isBase === true;
 }
 
 function load() {
@@ -272,9 +279,17 @@ function calculate() {
     const bs = num(next.bs);
     const fs = num(next.fs);
     let gl = num(next.gl);
-    if (index > 0 && fs !== null) {
+    const baseRow = index === 0 || next.isBase === true;
+    if (baseRow) {
+      // 基準高を置き直した行からは器高を計算し直す
+      if (index > 0) currentIH = null;
+    } else if (fs !== null) {
       gl = currentIH !== null ? currentIH - fs : null;
       next.gl = fmt(gl);
+    } else {
+      // FSが消えたら、そのFSから求めた前回の計算結果も消す
+      gl = null;
+      next.gl = "";
     }
     if (gl !== null && bs !== null) {
       currentIH = gl + bs;
@@ -604,6 +619,23 @@ function moveRow(delta) {
   if (!confirmLeaveCell()) return;
   finalizeSelectedValue();
   const nextRow = Math.max(0, Math.min(rows.length - 1, selected.row + delta));
+  if (nextRow === selected.row) return;
+
+  // FS列は「数値を入れた最下段のすぐ一つ下」までしか下がれない。
+  // 空のまま、さらに下の行へ飛ばさない。
+  if (selected.field === "fs" && delta > 0 && nextRow > Math.max(lastFilledFsRow() + 1, 1)) {
+    rejectInput();
+    return;
+  }
+
+  // FSが空の行のBSは、器高を計算する元になるGLが無い。
+  // 新たに基準高を置いてもらい、選ばなければ元のセルに留まる。
+  if (selected.field === "bs" && nextRow > 0
+      && !isBaseRow(nextRow) && num(rows[nextRow]?.fs) === null) {
+    openBasePointSheet(nextRow, false);
+    return;
+  }
+
   selected = { row: nextRow, field: selected.field };
   if (selected.field === "gl" && nextRow > 0) selected.field = "fs";
   if (isBasePointCell(nextRow, selected.field)) selected.field = "bs";
@@ -877,7 +909,7 @@ function applyBaseEntry() {
   const name = $("#savedPointName").value.trim();
   const value = fmtInput($("#savedPointValue").value);
   if (!name || !value) return;
-  rows[drawerTargetRow] = blankRow({ ...rows[drawerTargetRow], point: name, gl: value });
+  rows[drawerTargetRow] = blankRow({ ...rows[drawerTargetRow], point: name, gl: value, isBase: true });
   if (drawerTargetRow === 0) syncBaseInputs();
   // 1行目のGLは編集できないので、選択は隣のBSに置く。
   selected = { row: drawerTargetRow, field: drawerTargetRow === 0 ? "bs" : "gl" };
@@ -921,7 +953,7 @@ function saveCurrentPoint() {
   const shouldCloseAfterSave = drawerMode !== "normal";
   registerSavedPoint(name, value);
   if (drawerMode === "base" && drawerTargetRow !== null && rows[drawerTargetRow]) {
-    rows[drawerTargetRow] = blankRow({ ...rows[drawerTargetRow], point: name, gl: value });
+    rows[drawerTargetRow] = blankRow({ ...rows[drawerTargetRow], point: name, gl: value, isBase: true });
     selected = { row: drawerTargetRow, field: drawerTargetRow === 0 ? "bs" : "gl" };
     buffer = drawerTargetRow === 0 ? (rows[drawerTargetRow].bs || "") : value;
     drawerSaved = true;
@@ -961,7 +993,7 @@ function finishSetupAndChooseBasePoint() {
 function recallPoint(point) {
   const row = ["base", "resume"].includes(drawerMode) && drawerTargetRow !== null ? drawerTargetRow : 0;
   if (!rows[row]) rows[row] = blankRow();
-  rows[row] = blankRow({ ...rows[row], point: point.name, gl: point.value });
+  rows[row] = blankRow({ ...rows[row], point: point.name, gl: point.value, isBase: true });
   if (row === 0) syncBaseInputs();
   selected = { row, field: drawerMode === "resume" ? "bs" : "gl" };
   buffer = drawerMode === "resume" ? (rows[row].bs || "") : point.value;
@@ -1066,7 +1098,7 @@ function addBasePointFromSheet() {
 function applyBasePointSelection(point) {
   const row = basePointSheetTarget ?? 0;
   if (!rows[row]) rows[row] = blankRow();
-  rows[row] = blankRow({ ...rows[row], point: point.name, gl: point.value });
+  rows[row] = blankRow({ ...rows[row], point: point.name, gl: point.value, isBase: true });
   closeBasePointSheet();
   if (row === 0) syncBaseInputs();
   selected = { row, field: "bs" };
@@ -2080,6 +2112,8 @@ function normalizeImportedRows(sourceRows) {
       gl = lastKnownIH - fs;
       next.gl = fmt(gl);
     }
+    // FSが無いのにGLが入っている行は、基準高を置き直した行とみなす
+    if (index > 0 && fs === null && gl !== null) next.isBase = true;
     if (gl !== null && bs !== null) {
       lastKnownIH = gl + bs;
     } else if (ih !== null) {

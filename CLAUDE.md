@@ -63,7 +63,7 @@ git 操作は必ず `C:\Users\mande\開発\LEVEL` で行う。
 ファイルを変更したら必ず `service-worker.js` 先頭のキャッシュ名を上げること。
 
 ```javascript
-const CACHE_NAME = "level-book-vr0006";  // 番号を上げる
+const CACHE_NAME = "level-book-vr0007";  // 番号を上げる
 ```
 
 上げないとユーザーのブラウザに古いキャッシュが残り続ける。
@@ -85,10 +85,14 @@ const CACHE_NAME = "level-book-vr0006";  // 番号を上げる
 // 続けて BS があれば : IH_i = GL_i + BS_i
 ```
 
-**行0の FS は計算に使われない**（`index > 0 && fs !== null` の条件）。
+**行0の FS は計算に使われない**。
 
-`rows` の1行: `{ bs, ih, fs, gl, point }` — すべて文字列。
+`rows` の1行: `{ bs, ih, fs, gl, point, isBase }`。
 `ih` と `gl`（行1以降）は `calculate()` が算出する計算列。
+`isBase` は「GL が計算結果ではなく置き直した基準高」の印で、その行から器高を計算し直す。
+
+**FS を消したら、その FS から求めた GL・IH も消える**（非基準行は `next.gl = ""`）。
+古い GL が残って誤った器高を出し続けないための処理なので、外さないこと。
 
 ## 数値の扱い
 
@@ -112,6 +116,12 @@ const CACHE_NAME = "level-book-vr0006";  // 番号を上げる
 - `←` `→`（列移動）も廃止。物理キーボードの矢印/Tabのみ
 - BS/FS ボタンは `lastFilledFsRow() + 1` の行を選ぶ
   （FSは行1以降に限定。行0はFSを持たないため）
+
+### 上下移動（`moveRow`）の制限
+
+- **FS列**: 下へは「FS入力済み最下段のすぐ一つ下」まで。空のままさらに下へは行かせない（`rejectInput()`）
+- **BS列**: 移動先のFSが空で基準行でもないなら、移動せず基準点選択シートを開く。
+  選ばずに閉じたら元のセルに留まる（`selected` を触らないので自動的にそうなる）
 
 ## 音声フィードバック
 

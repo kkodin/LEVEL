@@ -1,4 +1,4 @@
-const CACHE_NAME = "level-book-vr0006";
+const CACHE_NAME = "level-book-vr0007";
 const APP_FILES = [
   "./",
   "./index.html",
