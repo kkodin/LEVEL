@@ -936,3 +936,8 @@ body.input-reject::after {
 .accordion-body { display: none; padding: 10px; }
 .accordion-section.open .accordion-body { display: block; }
 .accordion-body .meta-bar { margin-top: 0; padding-top: 0; border-top: 0; }
+
+/* 基準点が必須のときは、閉じる手段を出さない */
+#basePointSheet.required #basePointSheetClose,
+#basePointSheet.required .point-picker-actions { display: none; }
+#basePointSheet.required .base-point-hint { color: #b3261e; font-weight: 700; }

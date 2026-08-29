@@ -8,7 +8,7 @@ let tables = [];
 let activeTableIndex = 0;
 let savedPoints = [];
 let meta = { title: "", site: "", date: "", place: "" };
-let selected = { row: 0, field: "gl" };
+let selected = { row: 0, field: "bs" };
 let buffer = "";
 let saveTimer = 0;
 let drawerMode = "normal";
@@ -19,11 +19,17 @@ let setupComplete = false;
 let hasSavedWork = false;
 let pickerTargetRow = null;
 let basePointSheetTarget = null;
+let basePointSheetRequired = false;
 let expandedClosureRows = new Set();
 let locked = false;
 const DECIMALS = 3;
 let rejectFlashTimer = null;
 let audioCtx = null;
+const READBACK_DELAY = 900;
+let readbackTimer = null;
+let lastSpoken = "";
+let entryDirty = false;
+let ttsWarmed = false;
 
 const $ = (selector) => document.querySelector(selector);
 const fields = ["bs", "ih", "fs", "gl", "point"];
@@ -127,12 +133,14 @@ function switchTable(index) {
   rows = tables[activeTableIndex]?.rows || [blankRow()];
   expandedClosureRows.clear();
   syncTableToLegacyMeta();
-  selected = { row: 0, field: "gl" };
+  selected = { row: 0, field: "bs" };
   buffer = rows[0]?.gl || "";
   syncMetaToInputs();
   syncBaseInputs();
   render();
   saveSoon();
+  // 切り替え先の表に基準点が無ければ、決めるまで先へ進ませない。
+  ensureBasePoint();
 }
 
 function renameTable() {
@@ -168,7 +176,7 @@ function deleteTable() {
       rows = tables[activeTableIndex].rows;
       expandedClosureRows.clear();
       syncTableToLegacyMeta();
-      selected = { row: 0, field: "gl" };
+      selected = { row: 0, field: "bs" };
       buffer = rows[0]?.gl || "";
       syncMetaToInputs();
       syncBaseInputs();
@@ -196,14 +204,14 @@ function addTable() {
       rows = tables[activeTableIndex].rows;
       expandedClosureRows.clear();
       syncTableToLegacyMeta();
-      selected = { row: 0, field: "gl" };
+      selected = { row: 0, field: "bs" };
       buffer = "";
       syncMetaToInputs();
       syncBaseInputs();
       render();
       saveSoon();
-      // 表を新設したら、その表の出発点となる基準点を続けて決めてもらう。
-      openBasePointSheet(0);
+      // 表を新設したら、その表の出発点となる基準点を続けて決めてもらう（必須）。
+      openBasePointSheet(0, true);
     }
   );
 }
@@ -377,6 +385,11 @@ function render() {
 function selectCell(row, field) {
   if (locked) return;
   if (field === "ih" || (field === "gl" && row > 0)) return;
+  // 1行目のGL・測点名は直接入力させず、基準点選択画面から決める。
+  if (isBasePointCell(row, field)) {
+    openBasePointSheet(0, !hasBasePoint(0));
+    return;
+  }
   if (field === "fs" && !requireFirstBsBeforeFs()) return;
   if (field === "point") {
     selected = { row, field };
@@ -421,6 +434,10 @@ function finalizeSelectedValue() {
   rows[selected.row][selected.field] = normalized;
   buffer = normalized;
   if (selected.row === 0 && selected.field === "gl") $("#baseGl").value = normalized;
+  cancelReadback();
+  // 自分で打ち込んだ値だけを確認読みする。読み上げ済みと同じ値なら繰り返さない。
+  if (entryDirty && normalized && fmtInput(lastSpoken) !== normalized) speakDigits(normalized);
+  entryDirty = false;
   render();
   saveSoon();
 }
@@ -476,42 +493,58 @@ function buzz() {
 function appendKey(key) {
   if (locked) return;
   if (selected.field === "point") return;
+  if (isBasePointCell(selected.row, selected.field)) return;
   if (key === "." && buffer.includes(".")) { rejectInput(); return; }
   // 小数点以下は3桁まで。4桁目は受け付けない。
   if (key !== "." && decimalsOf(buffer) >= DECIMALS) { rejectInput(); return; }
-  speakKey(key);
+  warmUpSpeech();
+  clickTone();
+  entryDirty = true;
   buffer = buffer === "0" ? key : `${buffer}${key}`;
   writeSelectedValue(buffer);
+  scheduleReadback();
 }
 
 function toggleSign() {
   if (locked) return;
   if (selected.field === "point") return;
+  if (isBasePointCell(selected.row, selected.field)) return;
+  clickTone();
+  entryDirty = true;
   if (!buffer) buffer = rows[selected.row]?.[selected.field] || "0";
   buffer = buffer.startsWith("-") ? buffer.slice(1) : `-${buffer}`;
   writeSelectedValue(buffer);
+  scheduleReadback();
 }
 
 function backspace() {
   if (locked) return;
+  if (isBasePointCell(selected.row, selected.field)) return;
   if (selected.field === "point") {
     const next = ($("#activePoint").value || "").slice(0, -1);
     $("#activePoint").value = next;
     commitPointName();
     return;
   }
+  clickTone();
+  entryDirty = true;
   buffer = buffer.slice(0, -1);
   writeSelectedValue(buffer);
+  scheduleReadback();
 }
 
 function clearBuffer() {
   if (locked) return;
+  if (isBasePointCell(selected.row, selected.field)) return;
   if (selected.field === "point") {
     if (!rows[selected.row]) rows[selected.row] = blankRow();
     rows[selected.row].point = "";
     $("#activePoint").value = "";
     buffer = "";
   } else {
+    clickTone();
+    cancelReadback();
+    entryDirty = false;
     buffer = "";
     writeSelectedValue("");
     return;
@@ -525,11 +558,13 @@ function clearAllRows() {
   if (locked) return;
   rows = [blankRow()];
   expandedClosureRows.clear();
-  selected = { row: 0, field: "gl" };
+  selected = { row: 0, field: "bs" };
   buffer = "";
   syncBaseInputs();
   render();
   saveSoon();
+  // 基準点も消えるので、決め直すまで先へ進ませない。
+  ensureBasePoint();
 }
 
 // FS列に数値が入っている最下段の行番号を返す（1件も無ければ -1）。
@@ -570,13 +605,14 @@ function moveRow(delta) {
   const nextRow = Math.max(0, Math.min(rows.length - 1, selected.row + delta));
   selected = { row: nextRow, field: selected.field };
   if (selected.field === "gl" && nextRow > 0) selected.field = "fs";
+  if (isBasePointCell(nextRow, selected.field)) selected.field = "bs";
   buffer = rows[selected.row]?.[selected.field] || "";
   render();
 }
 
 function moveField(delta) {
   finalizeSelectedValue();
-  const editableFields = selected.row === 0 ? ["gl", "bs", "fs", "point"] : ["bs", "fs", "point"];
+  const editableFields = selected.row === 0 ? ["bs", "fs"] : ["bs", "fs", "point"];
   const index = editableFields.indexOf(selected.field);
   const nextIndex = Math.max(0, Math.min(editableFields.length - 1, index + delta));
   const nextField = editableFields[nextIndex];
@@ -586,13 +622,69 @@ function moveField(delta) {
   render();
 }
 
-function speakKey(key) {
+// 打鍵ごとに speechSynthesis を呼ぶと、スマホのTTSは起動に時間がかかるため
+// 連打に追いつかず取りこぼす。打鍵の合図は遅延のない Web Audio の打鍵音に任せ、
+// 読み上げは入力が止まってから値をまとめて確認読みする。
+const DIGIT_WORDS = {
+  "0": "ゼロ", "1": "いち", "2": "に", "3": "さん", "4": "よん",
+  "5": "ご", "6": "ろく", "7": "なな", "8": "はち", "9": "きゅう",
+  ".": "てん", "-": "マイナス"
+};
+
+function clickTone() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = "triangle";
+    osc.frequency.value = 2100;
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    const t = audioCtx.currentTime;
+    gain.gain.setValueAtTime(0.2, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.035);
+    osc.start(t);
+    osc.stop(t + 0.04);
+  } catch (error) {
+    /* 音を鳴らせない環境では無音のまま続行する */
+  }
+}
+
+// 「1.736」→「いち、てん、なな、さん、ろく」
+function speakDigits(value) {
   if (!("speechSynthesis" in window)) return;
-  const text = key === "." ? "点" : key;
-  const utterance = new SpeechSynthesisUtterance(text);
+  const text = String(value ?? "");
+  const words = [...text].map((ch) => DIGIT_WORDS[ch]).filter(Boolean);
+  if (!words.length) return;
+  const utterance = new SpeechSynthesisUtterance(words.join("、"));
   utterance.lang = "ja-JP";
+  utterance.rate = 1.1;
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(utterance);
+  lastSpoken = text;
+}
+
+// 連打中は読み上げず、手が止まってから読む。
+function scheduleReadback() {
+  window.clearTimeout(readbackTimer);
+  readbackTimer = window.setTimeout(() => {
+    if (entryDirty) speakDigits(buffer);
+  }, READBACK_DELAY);
+}
+
+function cancelReadback() {
+  window.clearTimeout(readbackTimer);
+}
+
+// TTSは初回の起動が特に遅いので、最初の打鍵で無音の空読みをして暖めておく。
+function warmUpSpeech() {
+  if (ttsWarmed || !("speechSynthesis" in window)) return;
+  ttsWarmed = true;
+  const warm = new SpeechSynthesisUtterance("　");
+  warm.lang = "ja-JP";
+  warm.volume = 0;
+  window.speechSynthesis.speak(warm);
 }
 
 function isTextEditingTarget(target) {
@@ -774,8 +866,9 @@ function applyBaseEntry() {
   if (!name || !value) return;
   rows[drawerTargetRow] = blankRow({ ...rows[drawerTargetRow], point: name, gl: value });
   if (drawerTargetRow === 0) syncBaseInputs();
-  selected = { row: drawerTargetRow, field: "gl" };
-  buffer = value;
+  // 1行目のGLは編集できないので、選択は隣のBSに置く。
+  selected = { row: drawerTargetRow, field: drawerTargetRow === 0 ? "bs" : "gl" };
+  buffer = drawerTargetRow === 0 ? (rows[drawerTargetRow].bs || "") : value;
   render();
   saveSoon();
 }
@@ -816,8 +909,8 @@ function saveCurrentPoint() {
   registerSavedPoint(name, value);
   if (drawerMode === "base" && drawerTargetRow !== null && rows[drawerTargetRow]) {
     rows[drawerTargetRow] = blankRow({ ...rows[drawerTargetRow], point: name, gl: value });
-    selected = { row: drawerTargetRow, field: "gl" };
-    buffer = value;
+    selected = { row: drawerTargetRow, field: drawerTargetRow === 0 ? "bs" : "gl" };
+    buffer = drawerTargetRow === 0 ? (rows[drawerTargetRow].bs || "") : value;
     drawerSaved = true;
     if (drawerTargetRow === 0) syncBaseInputs();
   }
@@ -841,7 +934,7 @@ function finishSetupAndChooseBasePoint() {
   rows = [blankRow()];
   tables = [{ name: meta.place || "表1", date: meta.date || todayString(), rows }];
   activeTableIndex = 0;
-  selected = { row: 0, field: "gl" };
+  selected = { row: 0, field: "bs" };
   buffer = "";
   setupComplete = true;
   drawerSaved = true;
@@ -849,7 +942,7 @@ function finishSetupAndChooseBasePoint() {
   render();
   saveSoon();
   closeDrawer();
-  openBasePointSheet(0);
+  openBasePointSheet(0, true);
 }
 
 function recallPoint(point) {
@@ -867,10 +960,34 @@ function recallPoint(point) {
 
 // ── 基準点の選択・追加画面 ─────────────────────────────────────────────────
 // 新規現場の開始時と表の追加時に開く。基準点が無ければ追加させ、あれば選ばせる。
-function openBasePointSheet(row = 0) {
+// required = true のときは基準点が決まるまで閉じられない。
+
+// その行に基準点（測点名と標高）が入っているか
+function hasBasePoint(row = 0) {
+  const target = rows[row];
+  return !!(target && target.point && num(target.gl) !== null);
+}
+
+// 1行目のGL・測点名は基準点から決めるセル。直接は編集させない。
+function isBasePointCell(row, field) {
+  return row === 0 && (field === "gl" || field === "point");
+}
+
+// 表に基準点が未設定なら、決まるまで先へ進ませない。
+function ensureBasePoint() {
+  if (locked) return;
+  if (!$("#startupChoice").classList.contains("hidden")) return;
+  if (!$("#basePointSheet").classList.contains("hidden")) return;
+  if (hasBasePoint(0)) return;
+  openBasePointSheet(0, true);
+}
+
+function openBasePointSheet(row = 0, required = false) {
   basePointSheetTarget = row;
+  basePointSheetRequired = required;
   $("#basePointNewName").value = "";
   $("#basePointNewValue").value = "";
+  $("#basePointSheet").classList.toggle("required", required);
   updateBasePointAddButton();
   renderBasePointSheet();
   $("#basePointSheet").classList.remove("hidden");
@@ -878,6 +995,14 @@ function openBasePointSheet(row = 0) {
 }
 
 function closeBasePointSheet() {
+  if (basePointSheetRequired && !hasBasePoint(basePointSheetTarget ?? 0)) {
+    window.alert(savedPoints.length
+      ? "この表の基準点を選んでください。"
+      : "基準点を1点以上登録し、この表の基準点を選んでください。");
+    return;
+  }
+  basePointSheetRequired = false;
+  $("#basePointSheet").classList.remove("required");
   $("#basePointSheet").classList.add("hidden");
   basePointSheetTarget = null;
 }
@@ -886,9 +1011,10 @@ function renderBasePointSheet() {
   const hint = $("#basePointSheetHint");
   const list = $("#basePointSheetList");
   if (!hint || !list) return;
-  hint.textContent = savedPoints.length
+  const suffix = basePointSheetRequired ? "設定するまで先へ進めません。" : "";
+  hint.textContent = (savedPoints.length
     ? "この表の出発点にする基準点を選んでください。"
-    : "基準点がまだ登録されていません。下の欄から追加してください（続けて何点でも登録できます）。";
+    : "基準点がまだ登録されていません。下の欄から追加してください（続けて何点でも登録できます）。") + suffix;
   list.innerHTML = "";
   savedPoints.forEach((point) => {
     const button = document.createElement("button");
@@ -926,9 +1052,9 @@ function addBasePointFromSheet() {
 
 function applyBasePointSelection(point) {
   const row = basePointSheetTarget ?? 0;
-  closeBasePointSheet();
   if (!rows[row]) rows[row] = blankRow();
   rows[row] = blankRow({ ...rows[row], point: point.name, gl: point.value });
+  closeBasePointSheet();
   if (row === 0) syncBaseInputs();
   selected = { row, field: "bs" };
   buffer = rows[row].bs || "";
@@ -1185,7 +1311,7 @@ function bind() {
     saveSoon();
   });
   $("#baseGl").addEventListener("click", () => {
-    selected = { row: 0, field: "gl" };
+    selected = { row: 0, field: "bs" };
     buffer = rows[0]?.gl || "";
     render();
   });
@@ -1272,7 +1398,7 @@ function startNewSite() {
     activeTableIndex = 0;
     savedPoints = [];
     meta = { title: "", date: todayString(), site: "", place: "" };
-    selected = { row: 0, field: "gl" };
+    selected = { row: 0, field: "bs" };
     buffer = "";
     syncMetaToInputs();
     syncBaseInputs();
@@ -1763,7 +1889,7 @@ function applyImportedWorkbook(workbook) {
   rows = tables[0].rows;
   setupComplete = true;
   syncTableToLegacyMeta();
-  selected = { row: 0, field: "gl" };
+  selected = { row: 0, field: "bs" };
   buffer = rows[0]?.gl || "";
   syncMetaToInputs();
   syncBaseInputs();
@@ -1919,7 +2045,7 @@ function applyImportedCsv(table, filename) {
   updateLockButton();
   if (!nextMeta.date) nextMeta.date = todayString();
   meta = nextMeta;
-  selected = { row: 0, field: "gl" };
+  selected = { row: 0, field: "bs" };
   buffer = rows[0]?.gl || "";
   setupComplete = true;
   syncMetaToInputs();
