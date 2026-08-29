@@ -325,13 +325,17 @@ label span {
   background: #eef4ef;
   box-shadow: 0 -10px 24px rgba(21, 39, 31, 0.12);
 }
+/* 読み取り行と AC は、キーパッドと同じ4列グリッドに乗せて左右を完全に揃える。
+   読み取り行が1〜3列目、AC が4列目（＝C/⌫/+/- と同じ幅・同じ位置）。 */
 .entry-top {
   display: grid;
-  grid-template-columns: 1fr 92px;
-  gap: 7px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
   align-items: stretch;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
+.entry-readout { grid-column: 1 / span 3; }
+.all-clear-button { grid-column: 4; }
 .entry-readout {
   display: grid;
   grid-template-columns: 52px 1fr 1.1fr;
@@ -343,7 +347,7 @@ label span {
   background: #fff;
 }
 .all-clear-button {
-  min-height: 56px;
+  min-height: 44px;
   padding: 0;
   font-size: 18px;
 }

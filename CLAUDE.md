@@ -66,7 +66,7 @@ git 操作は必ず `C:\Users\mande\開発\LEVEL` で行う。
 ファイルを変更したら必ず `service-worker.js` 先頭のキャッシュ名を上げること。
 
 ```javascript
-const CACHE_NAME = "level-book-vr0008";  // 番号を上げる
+const CACHE_NAME = "level-book-vr0009";  // 番号を上げる
 ```
 
 上げないとユーザーのブラウザに古いキャッシュが残り続ける。
@@ -119,6 +119,10 @@ const CACHE_NAME = "level-book-vr0008";  // 番号を上げる
 - `←` `→`（列移動）も廃止。物理キーボードの矢印/Tabのみ
 - BS/FS ボタンは `lastFilledFsRow() + 1` の行を選ぶ
   （FSは行1以降に限定。行0はFSを持たないため）
+- **BS列にフォーカスがある状態で BS を押した場合**は、その行へ移したうえで
+  新しい基準高の選択を求める（`requestNewBaseGl`）。選ばずに閉じたら元のセルに戻る
+- `.entry-top`（読み取り行＋AC）もキーパッドと同じ4列グリッドに乗せている。
+  独自の列指定に戻すと AC だけ幅がずれるので変えないこと
 
 ### 上下移動（`moveRow`）の制限
 

@@ -20,6 +20,7 @@ let hasSavedWork = false;
 let pickerTargetRow = null;
 let basePointSheetTarget = null;
 let basePointSheetRequired = false;
+let basePointSheetReturnTo = null;
 let expandedClosureRows = new Set();
 let locked = false;
 const DECIMALS = 3;
@@ -593,9 +594,15 @@ function lastFilledFsRow() {
 function chooseBs() {
   if (locked) return;
   if (!confirmLeaveCell()) return;
+  const origin = { ...selected };
   finalizeSelectedValue();
   const row = lastFilledFsRow() + 1;
   if (!rows[row]) rows[row] = blankRow();
+  // BS列から押したときは、移動先で計算を始めるための基準高を選んでもらう
+  if (origin.field === "bs" && !isBaseRow(row) && num(rows[row].fs) === null) {
+    requestNewBaseGl(row, origin);
+    return;
+  }
   selected = { row, field: "bs" };
   buffer = rows[row].bs || "";
   render();
@@ -633,7 +640,7 @@ function moveRow(delta) {
   // 新たに基準高を置いてもらい、選ばなければ元のセルに留まる。
   if (selected.field === "bs" && nextRow > 0
       && !isBaseRow(nextRow) && num(rows[nextRow]?.fs) === null) {
-    openBasePointSheet(nextRow, false);
+    requestNewBaseGl(nextRow, { ...selected });
     return;
   }
 
@@ -1028,6 +1035,17 @@ function ensureBasePoint() {
   openBasePointSheet(0, true);
 }
 
+// FSが無い行のBSは、器高を計算する元になるGLが無い。
+// その行へ移したうえで新しい基準高を求め、選ばれなければ元のセルへ戻す。
+function requestNewBaseGl(row, originCell) {
+  if (!rows[row]) rows[row] = blankRow();
+  basePointSheetReturnTo = originCell;
+  selected = { row, field: "bs" };
+  buffer = rows[row].bs || "";
+  render();
+  openBasePointSheet(row, false);
+}
+
 function openBasePointSheet(row = 0, required = false) {
   basePointSheetTarget = row;
   basePointSheetRequired = required;
@@ -1047,6 +1065,13 @@ function closeBasePointSheet() {
       : "基準点を1点以上登録し、この表の基準点を選んでください。");
     return;
   }
+  // 基準高が決まらないまま閉じたら、呼び出し元のセルにフォーカスを戻す
+  if (basePointSheetReturnTo && !hasBasePoint(basePointSheetTarget ?? 0)) {
+    selected = basePointSheetReturnTo;
+    buffer = rows[selected.row]?.[selected.field] || "";
+    render();
+  }
+  basePointSheetReturnTo = null;
   basePointSheetRequired = false;
   $("#basePointSheet").classList.remove("required");
   $("#basePointSheet").classList.add("hidden");
