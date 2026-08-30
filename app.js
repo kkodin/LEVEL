@@ -1036,7 +1036,7 @@ function finishSetupAndChooseBasePoint() {
   readMetaFromInputs();
   if (!$("#surveyDate").value || !$("#siteName").value.trim() || !$("#surveyPlace").value.trim()) return;
   rows = [blankRow()];
-  tables = [{ name: meta.place || "表1", date: meta.date || todayString(), rows }];
+  tables = [{ name: meta.place || "表1", date: meta.date || todayString(), time: nowTimeString(), rows }];
   activeTableIndex = 0;
   selected = { row: 0, field: "bs" };
   buffer = "";
@@ -1527,7 +1527,7 @@ function startNewSite() {
     locked = false;
     updateLockButton();
     rows = [blankRow()];
-    tables = [{ name: "表1", date: todayString(), rows }];
+    tables = [{ name: "表1", date: todayString(), time: nowTimeString(), rows }];
     activeTableIndex = 0;
     savedPoints = [];
     meta = { title: "", date: todayString(), site: "", place: "" };

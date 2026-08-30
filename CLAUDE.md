@@ -78,7 +78,7 @@ sticky 時に下の行が見出しの背景を透けて見える。罫線は各�
 ファイルを変更したら必ず `service-worker.js` 先頭のキャッシュ名を上げること。
 
 ```javascript
-const CACHE_NAME = "level-book-vr0025";  // 番号を上げる
+const CACHE_NAME = "level-book-vr0026";  // 番号を上げる
 ```
 
 上げないとユーザーのブラウザに古いキャッシュが残り続ける。
@@ -103,6 +103,8 @@ const CACHE_NAME = "level-book-vr0025";  // 番号を上げる
 **行0の FS は計算に使われない**。
 
 表: `{ name, date, time, rows }`。`time` は作成時刻 `"HH:MM"`（24時制、無ければ空）。
+**新しく表を作る3経路（`addTable` / `finishSetupAndChooseBasePoint` / `startNewSite`）は
+必ず `nowTimeString()` を入れる**。古いデータへの後付けはしない。
 日付と同じく 表追加 / 名称変更 / ドロワー の3か所で編集できる。
 xlsxのシート名は `YYYY.MM.DD_HHMM_名前`（旧形式の読み込みにも対応）。
 
