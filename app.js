@@ -414,6 +414,12 @@ function selectCell(row, field) {
     awaitingConfirm = false;
   }
   if (field === "fs" && !requireFirstBsBeforeFs()) return;
+  // FSが空で基準行でもない行はGLが求まっていない。
+  // そこにBSを入れてもIH(=GL+BS)を出せないので、先に基準高を決めてもらう。
+  if (field === "bs" && row > 0 && !isBaseRow(row) && num(rows[row]?.fs) === null) {
+    requestNewBaseGl(row, { ...selected });
+    return;
+  }
   if (field === "point") {
     selected = { row, field };
     buffer = rows[row]?.point || "";
