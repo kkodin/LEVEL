@@ -78,7 +78,7 @@ sticky 時に下の行が見出しの背景を透けて見える。罫線は各�
 ファイルを変更したら必ず `service-worker.js` 先頭のキャッシュ名を上げること。
 
 ```javascript
-const CACHE_NAME = "level-book-vr0021";  // 番号を上げる
+const CACHE_NAME = "level-book-vr0022";  // 番号を上げる
 ```
 
 上げないとユーザーのブラウザに古いキャッシュが残り続ける。
@@ -101,6 +101,10 @@ const CACHE_NAME = "level-book-vr0021";  // 番号を上げる
 ```
 
 **行0の FS は計算に使われない**。
+
+表: `{ name, date, time, rows }`。`time` は作成時刻 `"HH:MM"`（24時制、無ければ空）。
+日付と同じく 表追加 / 名称変更 / ドロワー の3か所で編集できる。
+xlsxのシート名は `YYYY.MM.DD_HHMM_名前`（旧形式の読み込みにも対応）。
 
 `rows` の1行: `{ bs, ih, fs, gl, point, isBase }`。
 `ih` と `gl`（行1以降）は `calculate()` が算出する計算列。

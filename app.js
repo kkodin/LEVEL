@@ -78,6 +78,7 @@ function normalizeTable(table, index) {
   return {
     name: String(table?.name || (index === 0 ? tableNameFromMeta() : "") || `表${index + 1}`).trim(),
     date: table?.date || (index === 0 ? meta.date : "") || todayString(),
+    time: normalizeTimeInput(table?.time),
     rows: table?.rows?.length ? table.rows : [blankRow()]
   };
 }
@@ -100,8 +101,9 @@ function syncTableToLegacyMeta() {
 
 function tableDisplayName(table, index) {
   const date = table?.date ? formatSurveyDate(table.date) : "日付未設定";
+  const time = normalizeTimeInput(table?.time);
   const name = table?.name || `表${index + 1}`;
-  return `${date} ${name}`;
+  return `${date}${time ? ` ${time}` : ""} ${name}`;
 }
 
 function rowHasWork(row) {
@@ -157,13 +159,15 @@ function renameTable() {
     "表の名称変更",
     [
       { id: "modal-rename-name", label: "作業名（表の名前）", value: table.name || "", type: "text" },
-      { id: "modal-rename-date", label: "作成日", value: table.date || todayString(), type: "date" }
+      { id: "modal-rename-date", label: "作成日", value: table.date || todayString(), type: "date" },
+      { id: "modal-rename-time", label: "作成時刻", value: normalizeTimeInput(table.time) || nowTimeString(), type: "time" }
     ],
     (values) => {
       const name = (values["modal-rename-name"] || "").trim();
       if (!name) return;
       tables[activeTableIndex].name = name;
       tables[activeTableIndex].date = normalizeDateInput(values["modal-rename-date"] || todayString());
+      tables[activeTableIndex].time = normalizeTimeInput(values["modal-rename-time"]);
       syncTableToLegacyMeta();
       syncMetaToInputs();
       render();
@@ -201,13 +205,15 @@ function addTable() {
     "表を追加",
     [
       { id: "modal-table-name", label: "作業名（表の名前）", value: defaultName, type: "text" },
-      { id: "modal-table-date", label: "作成日", value: todayString(), type: "date" }
+      { id: "modal-table-date", label: "作成日", value: todayString(), type: "date" },
+      { id: "modal-table-time", label: "作成時刻", value: nowTimeString(), type: "time" }
     ],
     (values) => {
       const name = (values["modal-table-name"] || "").trim();
       if (!name) return;
       const date = normalizeDateInput(values["modal-table-date"] || todayString());
-      tables.push({ name, date, rows: [blankRow()] });
+      const time = normalizeTimeInput(values["modal-table-time"]) || nowTimeString();
+      tables.push({ name, date, time, rows: [blankRow()] });
       activeTableIndex = tables.length - 1;
       rows = tables[activeTableIndex].rows;
       expandedClosureRows.clear();
@@ -840,6 +846,7 @@ function syncBaseInputs() {
 function syncMetaToInputs() {
   const table = currentTable();
   $("#surveyDate").value = table?.date || meta.date || todayString();
+  $("#surveyTime").value = normalizeTimeInput(table?.time);
   $("#siteName").value = meta.site || "";
   $("#surveyPlace").value = table?.name || meta.place || "";
   updateSurveySummary();
@@ -850,6 +857,7 @@ function readMetaFromInputs() {
   const table = currentTable();
   if (table) {
     table.date = $("#surveyDate").value || todayString();
+    table.time = normalizeTimeInput($("#surveyTime").value);
     table.name = $("#surveyPlace").value.trim() || table.name || `表${activeTableIndex + 1}`;
     meta.date = table.date;
     meta.place = table.name;
@@ -862,9 +870,30 @@ function updateSurveySummary() {
   if (meta.site) parts.push(`現場名：${meta.site}`);
   if (table?.name) parts.push(`作業名：${table.name}`);
   const firstLine = parts.join("　/　");
-  const secondLine = table?.date ? `作成日：${formatSurveyDate(table.date)}` : "";
+  const time = normalizeTimeInput(table?.time);
+  const secondLine = table?.date
+    ? `作成日：${formatSurveyDate(table.date)}${time ? ` ${time}` : ""}`
+    : "";
   $("#surveySummary").innerHTML = [firstLine, secondLine].filter(Boolean).map(escapeHtml).join("<br>");
   updateClosureDisplay();
+}
+
+// 作成時刻は24時制の "HH:MM"。"H:MM" や "HHMM" も受け付けて整える。
+// 空文字はそのまま空で返す（時刻の無い古い表を勝手に埋めないため）。
+function nowTimeString() {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+}
+
+function normalizeTimeInput(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  const match = text.match(/^(\d{1,2}):?(\d{2})$/);
+  if (!match) return "";
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (!Number.isInteger(hour) || hour > 23 || minute > 59) return "";
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
 function normalizeDateInput(value) {
@@ -1750,8 +1779,9 @@ function closureSheetRows(data) {
 
 function tableSheetTitle(table, index) {
   const date = table?.date ? formatSurveyDate(table.date) : "日付未設定";
+  const time = normalizeTimeInput(table?.time).replace(":", "");
   const name = table?.name || `表${index + 1}`;
-  return `${date}_${name}`;
+  return `${date}_${time ? `${time}_` : ""}${name}`;
 }
 
 function xlsxRowsForRows(sourceRows) {
@@ -1966,7 +1996,7 @@ async function parseXlsx(bytes, filename) {
       gl: cleanCsvNumber(line[3]),
       point: line[4] || ""
     })).filter(rowHasWork);
-    workbook.tables.push({ name: tableMeta.name, date: tableMeta.date, rows: normalizeImportedRows(dataRows) });
+    workbook.tables.push({ name: tableMeta.name, date: tableMeta.date, time: tableMeta.time || "", rows: normalizeImportedRows(dataRows) });
   }
   return workbook;
 }
@@ -2013,7 +2043,7 @@ function parseExcelXml(text, filename) {
       gl: cleanCsvNumber(line[3]),
       point: line[4] || ""
     })).filter(rowHasWork);
-    workbook.tables.push({ name: tableMeta.name, date: tableMeta.date, rows: normalizeImportedRows(dataRows) });
+    workbook.tables.push({ name: tableMeta.name, date: tableMeta.date, time: tableMeta.time || "", rows: normalizeImportedRows(dataRows) });
   });
   return workbook;
 }
@@ -2055,9 +2085,20 @@ function excelSheetValues(sheet) {
 }
 
 function tableMetaFromSheetName(sheetName, fallbackDate) {
-  const match = String(sheetName || "").match(/^(\d{4})[.\-](\d{2})[.\-](\d{2})_(.+)$/);
-  if (!match) return { date: fallbackDate || todayString(), name: sheetName || "表1" };
-  return { date: `${match[1]}-${match[2]}-${match[3]}`, name: match[4] || "表1" };
+  const text = String(sheetName || "");
+  // 新形式 YYYY.MM.DD_HHMM_名前
+  const withTime = text.match(/^(\d{4})[.\-](\d{2})[.\-](\d{2})_(\d{2})(\d{2})_(.+)$/);
+  if (withTime) {
+    return {
+      date: `${withTime[1]}-${withTime[2]}-${withTime[3]}`,
+      time: normalizeTimeInput(`${withTime[4]}:${withTime[5]}`),
+      name: withTime[6] || "表1"
+    };
+  }
+  // 旧形式 YYYY.MM.DD_名前
+  const match = text.match(/^(\d{4})[.\-](\d{2})[.\-](\d{2})_(.+)$/);
+  if (!match) return { date: fallbackDate || todayString(), time: "", name: text || "表1" };
+  return { date: `${match[1]}-${match[2]}-${match[3]}`, time: "", name: match[4] || "表1" };
 }
 function applyImportedCsv(table, filename) {
   const nextMeta = { title: filename, date: "", site: "", place: "" };
@@ -2067,16 +2108,18 @@ function applyImportedCsv(table, filename) {
   let currentRows = null;
   let currentTableName = "";
   let currentTableDate = "";
+  let currentTableTime = "";
 
   function pushCurrentTable() {
     if (!currentRows) return;
     const normalizedRows = normalizeImportedRows(currentRows);
     if (normalizedRows.length) {
-      nextTables.push({ name: currentTableName || `表${nextTables.length + 1}`, date: currentTableDate || nextMeta.date || todayString(), rows: normalizedRows });
+      nextTables.push({ name: currentTableName || `表${nextTables.length + 1}`, date: currentTableDate || nextMeta.date || todayString(), time: currentTableTime, rows: normalizedRows });
     }
     currentRows = null;
     currentTableName = "";
     currentTableDate = "";
+    currentTableTime = "";
   }
 
   table.forEach((line) => {
@@ -2088,6 +2131,7 @@ function applyImportedCsv(table, filename) {
       pushCurrentTable();
       currentTableName = line[1] || `表${nextTables.length + 1}`;
       currentTableDate = normalizeDateInput(line[2] || nextMeta.date || todayString());
+      currentTableTime = normalizeTimeInput(line[3]);
       currentRows = [];
       section = "ROWS";
       return;
