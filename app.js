@@ -145,12 +145,15 @@ function switchTable(index) {
   syncTableToLegacyMeta();
   selected = { row: 0, field: "bs" };
   buffer = rows[0]?.bs || "";
+  // 読み込んだ直後の表は誤操作で書き換えないよう、必ず保護状態に戻す。
+  locked = true;
+  updateLockButton();
+  entryDirty = false;
+  awaitingConfirm = false;
   syncMetaToInputs();
   syncBaseInputs();
   render();
   saveSoon();
-  // 切り替え先の表に基準点が無ければ、決めるまで先へ進ませない。
-  ensureBasePoint();
 }
 
 function renameTable() {
@@ -1261,6 +1264,10 @@ function updateSavePointButton() {
 function toggleLock() {
   locked = !locked;
   updateLockButton();
+  render();
+  // 保護を解除して編集に入る時点で、基準点が未設定なら決めてもらう。
+  // （保護中は ensureBasePoint() が何もしないため、ここで拾う）
+  if (!locked) ensureBasePoint();
 }
 
 function updateLockButton() {

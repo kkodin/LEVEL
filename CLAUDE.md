@@ -78,7 +78,7 @@ sticky 時に下の行が見出しの背景を透けて見える。罫線は各�
 ファイルを変更したら必ず `service-worker.js` 先頭のキャッシュ名を上げること。
 
 ```javascript
-const CACHE_NAME = "level-book-vr0022";  // 番号を上げる
+const CACHE_NAME = "level-book-vr0023";  // 番号を上げる
 ```
 
 上げないとユーザーのブラウザに古いキャッシュが残り続ける。
@@ -167,6 +167,12 @@ xlsxのシート名は `YYYY.MM.DD_HHMM_名前`（旧形式の読み込みにも
 - 「確認せず次へ」☑（`skipConfirm`）にすると確認を挟まず直接 BS・FS を押せる。
   保存しないので読み込み直すと未チェックに戻る
 - 読み取り行の値は 40px・太字。小さくしないこと
+
+## 保護（ロック）
+
+`locked === true` で入力・移動を全部止める。ONになるのは
+「前回の続き」／Excel・CSV読込／**別の表への切替（`switchTable`）**。
+`ensureBasePoint()` は保護中に何もしないので、`toggleLock()` で**解除した時点**で呼んでいる。
 
 ## 基準点（必須フロー）
 
