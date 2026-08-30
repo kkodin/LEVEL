@@ -27,8 +27,10 @@ const DECIMALS = 3;
 let rejectFlashTimer = null;
 let audioCtx = null;
 let entryDirty = false;
-let leaveConfirmPending = false;
-let ttsWarmed = false;
+// 入力値の確認は音声をやめ、大きな文字＋OKボタンで行う。
+// skipConfirm が false のあいだは、OK を押すまで BS・FS を押させない。
+let skipConfirm = false;
+let awaitingConfirm = false;
 
 const $ = (selector) => document.querySelector(selector);
 const fields = ["bs", "ih", "fs", "gl", "point"];
@@ -389,6 +391,7 @@ function render() {
   }
   updateReadout();
   updateModes();
+  updateConfirmUi();
   renderPointList();
   renderPointSuggestions();
   renderTableSelect();
@@ -404,9 +407,10 @@ function selectCell(row, field) {
     openBasePointSheet(0, !hasBasePoint(0));
     return;
   }
-  // 別のセルへ移るときも、まず今のセルの値を読み上げて一度止める。
-  if ((row !== selected.row || field !== selected.field) && !confirmLeaveCell()) return;
-  entryDirty = false;
+  if (row !== selected.row || field !== selected.field) {
+    entryDirty = false;
+    awaitingConfirm = false;
+  }
   if (field === "fs" && !requireFirstBsBeforeFs()) return;
   if (field === "point") {
     selected = { row, field };
@@ -511,10 +515,8 @@ function appendKey(key) {
   if (key === "." && buffer.includes(".")) { rejectInput(); return; }
   // 小数点以下は3桁まで。4桁目は受け付けない。
   if (key !== "." && decimalsOf(buffer) >= DECIMALS) { rejectInput(); return; }
-  warmUpSpeech();
   clickTone();
-  resetLeaveConfirm();
-  entryDirty = true;
+  markEntryStarted();
   // 先頭の0は次の数字で置き換える。ただし「0.」はそのまま残す。
   buffer = buffer === "0" && key !== "." ? key : `${buffer}${key}`;
   writeSelectedValue(buffer);
@@ -525,8 +527,7 @@ function toggleSign() {
   if (selected.field === "point") return;
   if (isBasePointCell(selected.row, selected.field)) return;
   clickTone();
-  resetLeaveConfirm();
-  entryDirty = true;
+  markEntryStarted();
   if (!buffer) buffer = rows[selected.row]?.[selected.field] || "0";
   buffer = buffer.startsWith("-") ? buffer.slice(1) : `-${buffer}`;
   writeSelectedValue(buffer);
@@ -542,8 +543,7 @@ function backspace() {
     return;
   }
   clickTone();
-  resetLeaveConfirm();
-  entryDirty = true;
+  markEntryStarted();
   buffer = buffer.slice(0, -1);
   writeSelectedValue(buffer);
 }
@@ -558,7 +558,6 @@ function clearBuffer() {
     buffer = "";
   } else {
     clickTone();
-    resetLeaveConfirm();
     entryDirty = false;
     buffer = "";
     writeSelectedValue("");
@@ -592,8 +591,7 @@ function lastFilledFsRow() {
 }
 
 function chooseBs() {
-  if (locked) return;
-  if (!confirmLeaveCell()) return;
+  if (locked || isAwaitingConfirm()) return;
   const origin = { ...selected };
   finalizeSelectedValue();
   const row = lastFilledFsRow() + 1;
@@ -605,13 +603,13 @@ function chooseBs() {
   }
   selected = { row, field: "bs" };
   buffer = rows[row].bs || "";
+  awaitingConfirm = false;
   render();
   saveSoon();
 }
 
 function chooseFs() {
-  if (locked) return;
-  if (!confirmLeaveCell()) return;
+  if (locked || isAwaitingConfirm()) return;
   finalizeSelectedValue();
   if (!requireFirstBsBeforeFs()) return;
   // 0行目は基準点行でFSを持たないため、FSの選択は1行目以降に限る。
@@ -619,12 +617,12 @@ function chooseFs() {
   if (!rows[row]) rows[row] = blankRow();
   selected = { row, field: "fs" };
   buffer = rows[row].fs || "";
+  awaitingConfirm = false;
   render();
   saveSoon();
 }
 
 function moveRow(delta) {
-  if (!confirmLeaveCell()) return;
   finalizeSelectedValue();
   const nextRow = Math.max(0, Math.min(rows.length - 1, selected.row + delta));
   if (nextRow === selected.row) return;
@@ -648,11 +646,11 @@ function moveRow(delta) {
   if (selected.field === "gl" && nextRow > 0) selected.field = "fs";
   if (isBasePointCell(nextRow, selected.field)) selected.field = "bs";
   buffer = rows[selected.row]?.[selected.field] || "";
+  awaitingConfirm = false;
   render();
 }
 
 function moveField(delta) {
-  if (!confirmLeaveCell()) return;
   finalizeSelectedValue();
   const editableFields = selected.row === 0 ? ["bs", "fs"] : ["bs", "fs", "point"];
   const index = editableFields.indexOf(selected.field);
@@ -664,15 +662,8 @@ function moveField(delta) {
   render();
 }
 
-// 打鍵ごとに speechSynthesis を呼ぶと、スマホのTTSは起動に時間がかかるため
-// 連打に追いつかず取りこぼす。打鍵の合図は遅延のない Web Audio の打鍵音に任せ、
-// 読み上げは入力が止まってから値をまとめて確認読みする。
-const DIGIT_WORDS = {
-  "0": "ゼロ", "1": "いち", "2": "に", "3": "さん", "4": "よん",
-  "5": "ご", "6": "ろく", "7": "なな", "8": "はち", "9": "きゅう",
-  ".": "てん", "-": "マイナス"
-};
-
+// 打鍵の合図は遅延のない Web Audio の打鍵音だけ。
+// 音声合成による読み上げは処理が遅れて連打に追いつかないため使わない。
 function clickTone() {
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -693,51 +684,57 @@ function clickTone() {
   }
 }
 
-// 「1.736」→「いち、てん、なな、さん、ろく」
-function speakDigits(value) {
-  if (!("speechSynthesis" in window)) return;
-  const text = String(value ?? "");
-  const words = [...text].map((ch) => DIGIT_WORDS[ch]).filter(Boolean);
-  if (!words.length) return;
-  const utterance = new SpeechSynthesisUtterance(words.join("、"));
-  utterance.lang = "ja-JP";
-  utterance.rate = 1.1;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(utterance);
+// ── 入力値の確認 ──
+// 既定では、入力を始めると OK / 修正 が出て、OK を押すまで BS・FS を押せない。
+// 「確認せず次へ」にチェックを入れると、この確認を挟まず BS・FS が押せる。
+
+// 確認待ち＝BS・FSを押せない状態か
+function isAwaitingConfirm() {
+  return awaitingConfirm && !skipConfirm;
 }
 
-// セルから離れる操作の1回目では移動せず、そのセルの数値を読み上げて止める。
-// もう一度離れる操作をされたら「聞いて問題なかった」と判断して移動を通す。
-// 戻り値 true = 移動してよい、false = 今回は読み上げだけで止める。
-function confirmLeaveCell() {
-  if (locked) return true;
-  if (!("speechSynthesis" in window)) return true;
-  if (leaveConfirmPending) { leaveConfirmPending = false; return true; }
-  // 自分で打ち込んだ数値セルだけ確認する。触っていないセルは素通りさせる。
-  if (!entryDirty) return true;
-  if (selected.field === "point") return true;
-  if (isBasePointCell(selected.row, selected.field)) return true;
-  const raw = buffer || rows[selected.row]?.[selected.field] || "";
-  if (!raw) return true;
-  leaveConfirmPending = true;
-  speakDigits(fmtInput(raw) || raw);
-  return false;
+// 数値の入力が始まったことを記録する
+function markEntryStarted() {
+  entryDirty = true;
+  if (!skipConfirm) awaitingConfirm = true;
 }
 
-// 入力し直したら確認待ちは解除する（読み上げ中なら止める）。
-function resetLeaveConfirm() {
-  leaveConfirmPending = false;
-  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+function updateConfirmUi() {
+  const panel = document.querySelector(".entry-panel");
+  if (!panel) return;
+  panel.classList.toggle("awaiting-confirm", isAwaitingConfirm());
+  const skip = $("#skipConfirm");
+  skip.classList.toggle("checked", skipConfirm);
+  skip.setAttribute("aria-pressed", String(skipConfirm));
+  $("#skipConfirmMark").textContent = skipConfirm ? "☑" : "☐";
+  const blocked = isAwaitingConfirm();
+  $("#modeBs").disabled = blocked;
+  $("#modeFs").disabled = blocked;
 }
 
-// TTSは初回の起動が特に遅いので、最初の打鍵で無音の空読みをして暖めておく。
-function warmUpSpeech() {
-  if (ttsWarmed || !("speechSynthesis" in window)) return;
-  ttsWarmed = true;
-  const warm = new SpeechSynthesisUtterance("　");
-  warm.lang = "ja-JP";
-  warm.volume = 0;
-  window.speechSynthesis.speak(warm);
+// OK: 値を確定して確認待ちを解除する（BS・FSが押せるようになる）
+function confirmEntryOk() {
+  if (locked) return;
+  clickTone();
+  finalizeSelectedValue();
+  awaitingConfirm = false;
+  render();
+}
+
+// 修正: 入力し直せるよう値を消す。確認待ちは続く。
+function confirmEntryFix() {
+  if (locked) return;
+  clickTone();
+  buffer = "";
+  writeSelectedValue("");
+}
+
+// 「確認せず次へ」のチェックを切り替える
+function toggleSkipConfirm() {
+  clickTone();
+  skipConfirm = !skipConfirm;
+  if (skipConfirm) awaitingConfirm = false;
+  render();
 }
 
 function isTextEditingTarget(target) {
@@ -1391,6 +1388,9 @@ function bind() {
   $("#modeFs").addEventListener("click", chooseFs);
   $("#prevRow").addEventListener("click", () => moveRow(-1));
   $("#nextRow").addEventListener("click", () => moveRow(1));
+  $("#skipConfirm").addEventListener("click", toggleSkipConfirm);
+  $("#confirmOk").addEventListener("click", confirmEntryOk);
+  $("#confirmFix").addEventListener("click", confirmEntryFix);
   $("#allClearButton").addEventListener("click", () => showConfirmModal(
     "入力内容を消去",
     "BS・FS・GL・測点名をすべて消去してよいですか？",
@@ -1436,7 +1436,6 @@ function bind() {
     if (button.dataset.action === "sign") toggleSign();
     if (button.dataset.action === "back") backspace();
     if (button.dataset.action === "clear") clearBuffer();
-    if (button.dataset.action === "all-clear") clearAllRows();
   });
 }
 

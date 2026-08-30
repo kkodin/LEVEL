@@ -144,28 +144,38 @@
       <section class="entry-panel" aria-label="入力パネル">
         <div class="entry-top">
           <div class="entry-readout">
-            <span id="activeType">GL</span>
             <input id="activePoint" type="text" placeholder="測点名">
-            <strong id="activeValue">10.830</strong>
+            <div class="entry-value-row">
+              <span id="activeType">GL</span>
+              <strong id="activeValue">-</strong>
+            </div>
           </div>
-          <button id="allClearButton" class="all-clear-button" type="button" data-action="all-clear">AC</button>
+          <div class="entry-confirm">
+            <button id="skipConfirm" type="button" aria-pressed="false">
+              <span class="skip-label">確認せず<br>次へ</span>
+              <span class="skip-check" id="skipConfirmMark">☐</span>
+            </button>
+            <button id="confirmOk" type="button">OK</button>
+            <button id="confirmFix" type="button">修正</button>
+          </div>
         </div>
 
         <div class="keypad">
           <button type="button" data-key="7">7</button>
           <button type="button" data-key="8">8</button>
           <button type="button" data-key="9">9</button>
-          <button type="button" data-action="clear">C</button>
+          <button id="allClearButton" class="all-clear-button" type="button">AC</button>
           <button type="button" data-key="4">4</button>
           <button type="button" data-key="5">5</button>
           <button type="button" data-key="6">6</button>
-          <button type="button" data-action="back">⌫</button>
+          <button type="button" data-action="clear">C</button>
           <button type="button" data-key="1">1</button>
           <button type="button" data-key="2">2</button>
           <button type="button" data-key="3">3</button>
-          <button type="button" data-action="sign">+/-</button>
+          <button type="button" data-action="back">⌫</button>
           <button class="key-zero" type="button" data-key="0">0</button>
           <button class="key-dot" type="button" data-key=".">.</button>
+          <button class="key-sign" type="button" data-action="sign">+/-</button>
           <button id="prevRow" class="btn-nav" type="button">↑</button>
           <button id="nextRow" class="btn-nav" type="button">↓</button>
           <button id="modeBs" class="btn-mode" type="button">BS</button>
