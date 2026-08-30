@@ -78,7 +78,7 @@ sticky 時に下の行が見出しの背景を透けて見える。罫線は各�
 ファイルを変更したら必ず `service-worker.js` 先頭のキャッシュ名を上げること。
 
 ```javascript
-const CACHE_NAME = "level-book-vr0024";  // 番号を上げる
+const CACHE_NAME = "level-book-vr0025";  // 番号を上げる
 ```
 
 上げないとユーザーのブラウザに古いキャッシュが残り続ける。
@@ -194,17 +194,24 @@ xlsxのシート名は `YYYY.MM.DD_HHMM_名前`（旧形式の読み込みにも
 
 ## 横向きの2段組み
 
-`(orientation: landscape) and (min-width: 900px)` で、左=野帳表 / 右=入力パネル＋情報パネル
-の2段組みになる。**縦向きの見た目は変えていない。**
+`(orientation: landscape) and (min-width: 900px)` で `.app` をグリッドにする。
+**左＝現場情報・計算表切替・情報パネル / 右＝野帳表(上)＋テンキー(下)**。
+テンキーは押しやすいよう必ず右下。**縦向きの見た目は変えていない。**
 
-- `.entry-panel` と `.info-pane` を `.side-stack` で包んでいる。
-  縦向きは `.side-stack { display: contents }` なので入力パネルは従来どおり下端固定。
-  横向きだけ `.side-stack` を右端に fixed した縦フレックスにする
-- `applyUiScale()` は `isLandscapeLayout()` で拡大率の式を分岐する
-  （横向きはパネルが縦に収まること＋右カラムが幅の45%以内、が条件）
-- 情報パネル（`renderInfoPane`）は 誤差一覧 / 基準点一覧 / 現在の状態。**表示専用**にしてある
-- `.entry-top` / `.keypad` は `max-width: 480px`、表の数値4列は `width: min(110px, 17%)`。
-  広い画面で無駄に引き伸ばさないため。狭い画面の見た目は変わらない
+```
+grid-template-areas:
+  "summary table"   "switch  table"   "info    table"
+  "info    pad"     "state   pad";
+```
+
+- `.side-stack { display: contents }` は縦横どちらでも有効。横向きでは
+  `.entry-panel` と `.info-pane` がそのまま `.app` のグリッド項目になる
+- `.entry-panel` は横向きだけ `position: static`。縦向きは下端 `fixed` のまま
+- `info` を2行にまたがせて左カラムの残りを全部使う
+- `applyUiScale()` の横向きの式は `min(画面高/(パネル高+300), 画面幅/980, 2.4)`。
+  **拡大しすぎると表の行数が減る**ので表に300px残す
+- 情報パネル（`renderInfoPane`）は 誤差一覧 / 基準点一覧 / 現在の状態。**表示専用**
+- `.entry-top` / `.keypad` は `max-width: 480px`、表の数値4列は `width: min(110px, 17%)`
 
 ## 動作確認
 

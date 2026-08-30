@@ -2603,8 +2603,8 @@ const UI_BASE_WIDTH = 420;        // 設計上の横幅
 const UI_PANEL_MAX_RATIO = 0.5;   // 入力パネルが画面高さに占めてよい割合（縦向き）
 const UI_MAX_SCALE = 2.4;         // 拡大しすぎないための上限
 const UI_MAX_CONTENT_WIDTH = 900; // 横に間延びさせないための上限（縦向き）
-const UI_SIDE_WIDTH = 436;        // 横向きの右カラム幅（styles.css の --side-width と一致させる）
-const UI_SIDE_MAX_RATIO = 0.45;   // 右カラムが画面幅に占めてよい割合
+const UI_LAND_TABLE_MIN = 300;    // 横向きで表に最低限残したい高さ
+const UI_LAND_BASE_WIDTH = 980;   // 横向きで2段組みが窮屈にならない最低幅
 
 // 横向き2段組みのレイアウトが効いているか（styles.css のメディアクエリと同条件）
 function isLandscapeLayout() {
@@ -2627,12 +2627,13 @@ function applyUiScale() {
   const panel = document.querySelector(".entry-panel");
   const panelHeight = panel ? panel.getBoundingClientRect().height : UI_BASE_WIDTH;
 
-  // 横向きは右カラムに入力パネルを寄せるので、パネルの高さが画面に収まればよい。
+  // 横向きはテンキーを右下に置くので、テンキーの高さに加えて
+  // 表の高さも残せるところで頭打ちにする（拡大しすぎると表の行数が減る）。
   // 縦向きは入力パネルが画面の半分を超えないところで頭打ちにする。
   const fit = isLandscapeLayout()
     ? Math.min(
-        window.innerHeight / (panelHeight + 40),
-        (window.innerWidth * UI_SIDE_MAX_RATIO) / UI_SIDE_WIDTH,
+        window.innerHeight / (panelHeight + UI_LAND_TABLE_MIN),
+        window.innerWidth / UI_LAND_BASE_WIDTH,
         UI_MAX_SCALE
       )
     : Math.min(
