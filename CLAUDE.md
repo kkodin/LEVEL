@@ -66,7 +66,7 @@ git 操作は必ず `C:\Users\mande\開発\LEVEL` で行う。
 ファイルを変更したら必ず `service-worker.js` 先頭のキャッシュ名を上げること。
 
 ```javascript
-const CACHE_NAME = "level-book-vr0012";  // 番号を上げる
+const CACHE_NAME = "level-book-vr0017";  // 番号を上げる
 ```
 
 上げないとユーザーのブラウザに古いキャッシュが残り続ける。
@@ -118,6 +118,9 @@ const CACHE_NAME = "level-book-vr0012";  // 番号を上げる
 
 - 確定ボタンは廃止済み。測点名は**測点名セルをタップ**して選択シートから入れる
 - `←` `→`（列移動）も廃止。物理キーボードの矢印/Tabのみ
+- **行0の FS は選択できない**（`isUnusedCell()`）。計算に使わないセルなので斜線背景にしてある
+- **BS ボタンは、BS列にいて FS列に数値が1つも無いとき無効**（`lastFilledFsRow() < 0`）。
+  FSが無い＝GLが求まっていない＝`IH = GL + BS` を出せないため
 - FS ボタンは `lastFilledFsRow() + 1` の行を選ぶ（行0はFSを持たないため行1以降に限定）
 - **BS ボタンは押した時のフォーカス列で行き先が変わる**
   - FS列から押した → **同じ行の BS**（同一行のFSとBSは同じ移器点）
@@ -152,6 +155,16 @@ const CACHE_NAME = "level-book-vr0012";  // 番号を上げる
   （`×` と「あとで設定する」を非表示、`closeBasePointSheet()` が案内を出して拒否）
 - **行0の GL と測点名はキーパッドから編集不可**（`isBasePointCell()`）
 - 行0の GL セル／測点名セルをタップすると基準点選択シートが開く
+
+## 画面サイズへの追従
+
+`applyUiScale()` が `document.body.style.zoom` で全体を拡大し、タブレットでも表示幅いっぱいに使う。
+
+- 拡大率 = `min(画面幅/420, 画面高さ×0.5/パネル高さ, 2.4)`（パネルが画面の半分を超えない）
+- 余った幅は `--app-max-width`（上限900px）で表とパネルを広げて使い切る
+- `zoom` は `vh`/`vw` に効かないので `--app-vh` / `--app-vw` を配っている。
+  **CSS に `100vh` / `100dvh` を直接書かないこと**
+- `ResizeObserver` の再発火ループを避けるため `lastUiViewport` で実サイズ変化のみ処理する
 
 ## 動作確認
 

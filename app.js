@@ -339,6 +339,7 @@ function render() {
       td.dataset.row = String(rowIndex);
       td.dataset.field = field;
       if (field === "ih" || (field === "gl" && rowIndex > 0)) td.classList.add("computed");
+      if (isUnusedCell(rowIndex, field)) td.classList.add("unused");
       if (selected.row === rowIndex && selected.field === field) td.classList.add("selected");
       if (field === "point" && closure) {
         const isExpanded = expandedClosureRows.has(rowIndex);
@@ -402,6 +403,7 @@ function render() {
 function selectCell(row, field) {
   if (locked) return;
   if (field === "ih" || (field === "gl" && row > 0)) return;
+  if (isUnusedCell(row, field)) return;
   // 1行目のGL・測点名は直接入力させず、基準点選択画面から決める。
   if (isBasePointCell(row, field)) {
     openBasePointSheet(0, !hasBasePoint(0));
@@ -592,6 +594,7 @@ function lastFilledFsRow() {
 
 function chooseBs() {
   if (locked || isAwaitingConfirm()) return;
+  if (selected.field === "bs" && lastFilledFsRow() < 0) return;
   const origin = { ...selected };
   finalizeSelectedValue();
   // FS列から押したときは同じ行のBSへ。器高式では同一行のFSとBSが同じ移器点を指す。
@@ -647,6 +650,7 @@ function moveRow(delta) {
   selected = { row: nextRow, field: selected.field };
   if (selected.field === "gl" && nextRow > 0) selected.field = "fs";
   if (isBasePointCell(nextRow, selected.field)) selected.field = "bs";
+  if (isUnusedCell(nextRow, selected.field)) selected.field = "bs";
   buffer = rows[selected.row]?.[selected.field] || "";
   awaitingConfirm = false;
   render();
@@ -654,7 +658,7 @@ function moveRow(delta) {
 
 function moveField(delta) {
   finalizeSelectedValue();
-  const editableFields = selected.row === 0 ? ["bs", "fs"] : ["bs", "fs", "point"];
+  const editableFields = selected.row === 0 ? ["bs"] : ["bs", "fs", "point"];
   const index = editableFields.indexOf(selected.field);
   const nextIndex = Math.max(0, Math.min(editableFields.length - 1, index + delta));
   const nextField = editableFields[nextIndex];
@@ -710,7 +714,10 @@ function updateConfirmUi() {
   skip.setAttribute("aria-pressed", String(skipConfirm));
   $("#skipConfirmMark").textContent = skipConfirm ? "☑" : "☐";
   const blocked = isAwaitingConfirm();
-  $("#modeBs").disabled = blocked;
+  // FS列に数値が1つも無い＝GLが求まっていないので、BS を入れても器高を出せない。
+  // BS列にいるときはBSキーを押させない。
+  const noFsYet = selected.field === "bs" && lastFilledFsRow() < 0;
+  $("#modeBs").disabled = blocked || noFsYet;
   $("#modeFs").disabled = blocked;
 }
 
@@ -1023,6 +1030,11 @@ function hasBasePoint(row = 0) {
 // 1行目のGL・測点名は基準点から決めるセル。直接は編集させない。
 function isBasePointCell(row, field) {
   return row === 0 && (field === "gl" || field === "point");
+}
+
+// 1行目のFSは計算に使わない（GLは基準点から入る）ので選択させない。
+function isUnusedCell(row, field) {
+  return row === 0 && field === "fs";
 }
 
 // 表に基準点が未設定なら、決まるまで先へ進ませない。
@@ -2464,8 +2476,67 @@ function updateRowHighlights() {
   });
 }
 
+// ── 画面サイズへの追従 ──
+// 420px 幅の1画面として設計してあるので、タブレットなど広い端末では
+// 全体を拡大したうえで、余った幅も使い切って表示幅いっぱいに広げる。
+const UI_BASE_WIDTH = 420;        // 設計上の横幅
+const UI_PANEL_MAX_RATIO = 0.5;   // 入力パネルが画面高さに占めてよい割合
+const UI_MAX_SCALE = 2.4;         // 拡大しすぎないための上限
+const UI_MAX_CONTENT_WIDTH = 900; // 横に間延びさせないための上限
+
+let lastUiViewport = "";
+
+function applyUiScale() {
+  // zoom を変えると html の高さも変わって ResizeObserver が再発火するため、
+  // 実際に表示領域が変わったときだけ測り直す。
+  const viewport = `${window.innerWidth}x${window.innerHeight}`;
+  if (viewport === lastUiViewport) return;
+  lastUiViewport = viewport;
+
+  const root = document.documentElement.style;
+  // 等倍・基準幅に戻して、入力パネルの素の高さを測る
+  document.body.style.zoom = "";
+  root.setProperty("--app-max-width", `${UI_BASE_WIDTH}px`);
+  const panel = document.querySelector(".entry-panel");
+  const panelHeight = panel ? panel.getBoundingClientRect().height : UI_BASE_WIDTH;
+
+  // 横幅いっぱいまで拡大する。ただし入力パネルが画面を占領しないところで頭打ち。
+  const fit = Math.min(
+    window.innerWidth / UI_BASE_WIDTH,
+    (window.innerHeight * UI_PANEL_MAX_RATIO) / panelHeight,
+    UI_MAX_SCALE
+  );
+  const scale = fit > 1.02 ? fit : 1;
+  document.body.style.zoom = scale === 1 ? "" : String(scale);
+
+  // zoom は vh / vw に効かないので、拡大後の実寸を変数として配り直す。
+  // 高さで頭打ちになって幅が余ったぶんは、そのまま表と入力パネルを広げるのに使う。
+  const cssWidth = window.innerWidth / scale;
+  const contentWidth = Math.min(Math.max(UI_BASE_WIDTH, cssWidth), UI_MAX_CONTENT_WIDTH);
+  root.setProperty("--app-max-width", `${contentWidth}px`);
+  root.setProperty("--app-vh", `${window.innerHeight / scale}px`);
+  root.setProperty("--app-vw", `${cssWidth}px`);
+}
+
+// 回転・分割表示・ソフトキーボードなどで寸法が変わるたびに測り直す。
+// resize イベントが飛ばない環境もあるので ResizeObserver も併用する。
+let uiScaleFrame = 0;
+function scheduleUiScale() {
+  if (uiScaleFrame) return;
+  uiScaleFrame = window.requestAnimationFrame(() => {
+    uiScaleFrame = 0;
+    applyUiScale();
+  });
+}
+
 load();
 bind();
+applyUiScale();
+window.addEventListener("resize", scheduleUiScale);
+window.addEventListener("orientationchange", scheduleUiScale);
+if ("ResizeObserver" in window) {
+  new ResizeObserver(scheduleUiScale).observe(document.documentElement);
+}
 bindInlineModal();
 buffer = rows[0]?.gl || "";
 render();
