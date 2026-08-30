@@ -6,6 +6,14 @@
   --input: #fffbc4;
   --accent: #07866f;
   --active: #e21d2f;
+  --accent-dark: #05604f;
+  --accent-light: #0a9c81;
+  --key-face: #fdfefd;
+  --key-face-2: #eef3ef;
+  --key-edge: #c3d0c7;
+  --key-shadow: rgba(12, 40, 32, 0.16);
+  --warn: #e8590c;
+  --warn-dark: #c44708;
   --selected-row-bg: rgba(226, 29, 47, 0.055);
   --confirm-btn: #07866f;
 }
@@ -320,10 +328,10 @@ label span {
   z-index: 10;
   width: min(420px, 100%);
   transform: translateX(-50%);
-  padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+  padding: 9px 10px calc(9px + env(safe-area-inset-bottom));
   border-top: 1px solid #cfd8ce;
-  background: #eef4ef;
-  box-shadow: 0 -10px 24px rgba(21, 39, 31, 0.12);
+  background: linear-gradient(180deg, #f2f7f3 0%, #e6eee9 100%);
+  box-shadow: 0 -12px 28px rgba(21, 39, 31, 0.14);
 }
 /* 読み取り行と AC は、キーパッドと同じ4列グリッドに乗せて左右を完全に揃える。
    読み取り行が1〜3列目、AC が4列目（＝C/⌫/+/- と同じ幅・同じ位置）。 */
@@ -343,9 +351,11 @@ label span {
   gap: 2px;
   align-content: center;
   margin-bottom: 0;
-  padding: 4px 8px;
-  border: 4px solid #111;
-  background: #fff;
+  padding: 5px 9px;
+  border: 3px solid #111;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7faf8 100%);
+  box-shadow: 0 2px 5px var(--key-shadow);
 }
 .entry-value-row {
   display: grid;
@@ -388,12 +398,20 @@ label span {
 }
 .entry-confirm button {
   padding: 2px;
-  border-color: #e8590c;
-  background: #e8590c;
+  border: 1px solid var(--warn-dark);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #f2731f 0%, var(--warn) 100%);
   color: #fff;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 800;
   line-height: 1.15;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset, 0 2px 4px var(--key-shadow);
+  transition: transform 0.06s ease, box-shadow 0.06s ease;
+}
+.entry-confirm button:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 2px var(--key-shadow) inset;
 }
 #skipConfirm {
   display: grid;
@@ -404,9 +422,10 @@ label span {
 }
 #skipConfirm .skip-check { font-size: 20px; line-height: 1; }
 #skipConfirm.checked {
-  border-color: #8ecae6;
-  background: #8ecae6;
+  border-color: #4d9dc0;
+  background: linear-gradient(180deg, #a7d8ee 0%, #7fbfdd 100%);
   color: #06384a;
+  text-shadow: none;
 }
 #confirmOk,
 #confirmFix { display: none; }
@@ -428,19 +447,35 @@ label span {
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
 }
+/* 数字キー: 薄いグラデーションと縁の影で、押せる面に見せる。
+   屋外で見るので彩度は上げすぎず、コントラストを優先する。 */
 .keypad button {
-  min-height: 44px;
+  min-height: 46px;
   padding: 0;
-  font-size: 18px;
-  border-color: #cfd8ce;
-  background: #f8fbf8;
+  border: 1px solid var(--key-edge);
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--key-face) 0%, var(--key-face-2) 100%);
   color: var(--ink);
+  font-size: 21px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 0 #fff inset, 0 2px 3px var(--key-shadow);
+  transition: transform 0.06s ease, box-shadow 0.06s ease, filter 0.06s ease;
 }
-.keypad button[data-action],
+.keypad button:active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 2px var(--key-shadow) inset;
+  filter: brightness(0.97);
+}
+/* BS / FS: いちばん押す2つ。濃くして最前面に見せる */
 .keypad .btn-mode {
-  border-color: var(--accent);
-  background: var(--accent);
+  border-color: var(--accent-dark);
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-dark) 100%);
   color: #fff;
+  font-size: 22px;
+  letter-spacing: 0.06em;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.22) inset, 0 3px 6px var(--key-shadow);
 }
 .keypad .key-zero,
 .keypad .key-dot {
@@ -448,31 +483,42 @@ label span {
 }
 .keypad .key-zero { grid-column: 1; }
 .keypad .key-dot { grid-column: 2; }
+/* 移動キー(↑↓): 数字より一段控えめ */
 .keypad .btn-nav {
-  border-color: #cfd8ce;
-  background: #f8fbf8;
-  color: var(--ink);
-  font-size: 18px;
+  border-color: var(--key-edge);
+  background: linear-gradient(180deg, #f2f6f3 0%, #e4ebe6 100%);
+  color: var(--muted);
+  font-size: 20px;
 }
 .keypad .key-sign { grid-column: 4; grid-row: 4; }
 .keypad #prevRow { grid-column: 3; grid-row: 5; }
 .keypad #nextRow { grid-column: 4; grid-row: 5; }
 .keypad #modeBs { grid-column: 3; grid-row: 6; }
 .keypad #modeFs { grid-column: 4; grid-row: 6; }
+/* 機能キー(AC / C / ⌫ / +/-): 濃い緑。数字キーと役割で色を分ける */
 .keypad .all-clear-button,
 .keypad button[data-action] {
-  border-color: var(--accent);
-  background: var(--accent);
+  border-color: var(--accent-dark);
+  background: linear-gradient(180deg, var(--accent-light) 0%, var(--accent) 100%);
   color: #fff;
+  font-size: 19px;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.28) inset, 0 2px 4px var(--key-shadow);
 }
+.keypad .all-clear-button { letter-spacing: 0.04em; }
 /* 確認待ちのあいだは BS・FS を押させない */
 .keypad .btn-mode:disabled {
-  opacity: 0.4;
-  filter: grayscale(0.4);
+  opacity: 0.38;
+  filter: grayscale(0.5);
+  box-shadow: none;
+  cursor: default;
 }
+.keypad .btn-mode:disabled:active { transform: none; }
+/* いま入力中の列を示す */
 .keypad button.active-mode {
-  outline: 4px solid #111;
-  outline-offset: -4px;
+  outline: 3px solid #111;
+  outline-offset: -3px;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5) inset, 0 3px 8px var(--key-shadow);
 }
 
 /* 入力拒否（小数点以下4桁目など）の画面点滅 */

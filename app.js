@@ -594,7 +594,9 @@ function chooseBs() {
   if (locked || isAwaitingConfirm()) return;
   const origin = { ...selected };
   finalizeSelectedValue();
-  const row = lastFilledFsRow() + 1;
+  // FS列から押したときは同じ行のBSへ。器高式では同一行のFSとBSが同じ移器点を指す。
+  // それ以外はFS入力済み最下段のすぐ一つ下へ。
+  const row = origin.field === "fs" ? origin.row : lastFilledFsRow() + 1;
   if (!rows[row]) rows[row] = blankRow();
   // BS列から押したときは、移動先で計算を始めるための基準高を選んでもらう
   if (origin.field === "bs" && !isBaseRow(row) && num(rows[row].fs) === null) {
