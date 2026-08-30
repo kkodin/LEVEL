@@ -61,12 +61,24 @@ git 操作は必ず `C:\Users\mande\開発\LEVEL` で行う。
 `app.js` は `<script src="app.js">`（非module）なので、関数はすべてグローバル。
 ブラウザのコンソールから直接呼んで検証できる。
 
+## 表の見出し行
+
+`thead th` を `position: sticky; top: 0` で固定している。
+**`.level-table` は `border-collapse: separate` にすること**。`collapse` だと
+sticky 時に下の行が見出しの背景を透けて見える。罫線は各セルの右辺・下辺で引く。
+
+## `selected` と `buffer` の対応（重要）
+
+`selected = { row, field }` を書いたら、**直後の `buffer` が同じ `field` から
+取られているか必ず確認する**。初期選択をGL→BSに変えたとき `buffer = rows[0]?.gl`
+のままの箇所が6つ残り、保存データ読込時にBS欄がGLの値になる不具合を起こした。
+
 ## Service Worker の更新（必須）
 
 ファイルを変更したら必ず `service-worker.js` 先頭のキャッシュ名を上げること。
 
 ```javascript
-const CACHE_NAME = "level-book-vr0019";  // 番号を上げる
+const CACHE_NAME = "level-book-vr0021";  // 番号を上げる
 ```
 
 上げないとユーザーのブラウザに古いキャッシュが残り続ける。

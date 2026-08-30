@@ -142,7 +142,7 @@ function switchTable(index) {
   expandedClosureRows.clear();
   syncTableToLegacyMeta();
   selected = { row: 0, field: "bs" };
-  buffer = rows[0]?.gl || "";
+  buffer = rows[0]?.bs || "";
   syncMetaToInputs();
   syncBaseInputs();
   render();
@@ -185,7 +185,7 @@ function deleteTable() {
       expandedClosureRows.clear();
       syncTableToLegacyMeta();
       selected = { row: 0, field: "bs" };
-      buffer = rows[0]?.gl || "";
+      buffer = rows[0]?.bs || "";
       syncMetaToInputs();
       syncBaseInputs();
       render();
@@ -1406,7 +1406,7 @@ function bind() {
   });
   $("#baseGl").addEventListener("click", () => {
     selected = { row: 0, field: "bs" };
-    buffer = rows[0]?.gl || "";
+    buffer = rows[0]?.bs || "";
     render();
   });
   $("#activePoint").addEventListener("input", commitPointName);
@@ -1986,7 +1986,7 @@ function applyImportedWorkbook(workbook) {
   setupComplete = true;
   syncTableToLegacyMeta();
   selected = { row: 0, field: "bs" };
-  buffer = rows[0]?.gl || "";
+  buffer = rows[0]?.bs || "";
   syncMetaToInputs();
   syncBaseInputs();
   render();
@@ -2142,7 +2142,7 @@ function applyImportedCsv(table, filename) {
   if (!nextMeta.date) nextMeta.date = todayString();
   meta = nextMeta;
   selected = { row: 0, field: "bs" };
-  buffer = rows[0]?.gl || "";
+  buffer = rows[0]?.bs || "";
   setupComplete = true;
   syncMetaToInputs();
   syncBaseInputs();
@@ -2550,7 +2550,7 @@ if ("ResizeObserver" in window) {
   new ResizeObserver(scheduleUiScale).observe(document.documentElement);
 }
 bindInlineModal();
-buffer = rows[0]?.gl || "";
+buffer = rows[0]?.bs || "";
 render();
 updateStartupChoice();
 saveSoon();
