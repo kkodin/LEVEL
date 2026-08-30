@@ -402,6 +402,7 @@ function render() {
   updateReadout();
   updateModes();
   updateConfirmUi();
+  renderInfoPane();
   renderPointList();
   renderPointSuggestions();
   renderTableSelect();
@@ -2325,6 +2326,62 @@ function computeClosureAll() {
   return [...seen.values()];
 }
 
+// ── 情報パネル（横向きの右カラム） ──
+// 作業中に見えていて役に立つものだけを出す。誤操作を避けるため表示専用。
+function renderInfoPane() {
+  renderInfoClosure();
+  renderInfoPoints();
+  renderInfoStatus();
+}
+
+function renderInfoClosure() {
+  const list = $("#infoClosure");
+  if (!list) return;
+  const results = computeClosureAll();
+  if (!results.length) {
+    list.innerHTML = `<p class="info-empty">既知点と同名の測点がまだありません</p>`;
+    return;
+  }
+  list.innerHTML = results.map((item) => `
+    <div class="info-row">
+      <strong>${escapeHtml(item.point)}</strong>
+      <span class="info-diff ${closureClass(item.diff)}">${escapeHtml(signedMm(item.diff))}</span>
+      <span>既知 ${item.ref.toFixed(3)}　実測 ${item.measured.toFixed(3)}</span>
+    </div>`).join("");
+}
+
+function renderInfoPoints() {
+  const list = $("#infoPoints");
+  if (!list) return;
+  if (!savedPoints.length) {
+    list.innerHTML = `<p class="info-empty">基準点が登録されていません</p>`;
+    return;
+  }
+  list.innerHTML = savedPoints.map((point) => `
+    <div class="info-row">
+      <strong>${escapeHtml(point.name)}</strong>
+      <span>GL ${escapeHtml(point.value)}</span>
+    </div>`).join("");
+}
+
+function renderInfoStatus() {
+  const box = $("#infoStatus");
+  if (!box) return;
+  // いま基準にしている行＝最後に基準高を置いた行
+  let baseIndex = 0;
+  rows.forEach((row, index) => { if (index === 0 || row.isBase) baseIndex = index; });
+  const base = rows[baseIndex];
+  const lastIh = [...rows].reverse().find((row) => num(row.ih) !== null);
+  const lastGl = [...rows].reverse().find((row) => num(row.gl) !== null);
+  const line = (label, value) => `<div><span>${label}</span><b>${escapeHtml(value)}</b></div>`;
+  box.innerHTML = [
+    line("基準点", base?.point ? `${base.point}　GL ${base.gl || "-"}` : "未設定"),
+    line("器高 IH", lastIh?.ih || "-"),
+    line("最新 GL", lastGl?.gl || "-"),
+    line("記入行数", String(rows.filter(rowHasWork).length))
+  ].join("");
+}
+
 function updateClosureDisplay() {
   const results = computeClosureAll();
   const summary = $("#surveySummary");
@@ -2543,9 +2600,16 @@ function updateRowHighlights() {
 // 420px 幅の1画面として設計してあるので、タブレットなど広い端末では
 // 全体を拡大したうえで、余った幅も使い切って表示幅いっぱいに広げる。
 const UI_BASE_WIDTH = 420;        // 設計上の横幅
-const UI_PANEL_MAX_RATIO = 0.5;   // 入力パネルが画面高さに占めてよい割合
+const UI_PANEL_MAX_RATIO = 0.5;   // 入力パネルが画面高さに占めてよい割合（縦向き）
 const UI_MAX_SCALE = 2.4;         // 拡大しすぎないための上限
-const UI_MAX_CONTENT_WIDTH = 900; // 横に間延びさせないための上限
+const UI_MAX_CONTENT_WIDTH = 900; // 横に間延びさせないための上限（縦向き）
+const UI_SIDE_WIDTH = 436;        // 横向きの右カラム幅（styles.css の --side-width と一致させる）
+const UI_SIDE_MAX_RATIO = 0.45;   // 右カラムが画面幅に占めてよい割合
+
+// 横向き2段組みのレイアウトが効いているか（styles.css のメディアクエリと同条件）
+function isLandscapeLayout() {
+  return window.innerWidth > window.innerHeight && window.innerWidth >= 900;
+}
 
 let lastUiViewport = "";
 
@@ -2563,19 +2627,28 @@ function applyUiScale() {
   const panel = document.querySelector(".entry-panel");
   const panelHeight = panel ? panel.getBoundingClientRect().height : UI_BASE_WIDTH;
 
-  // 横幅いっぱいまで拡大する。ただし入力パネルが画面を占領しないところで頭打ち。
-  const fit = Math.min(
-    window.innerWidth / UI_BASE_WIDTH,
-    (window.innerHeight * UI_PANEL_MAX_RATIO) / panelHeight,
-    UI_MAX_SCALE
-  );
+  // 横向きは右カラムに入力パネルを寄せるので、パネルの高さが画面に収まればよい。
+  // 縦向きは入力パネルが画面の半分を超えないところで頭打ちにする。
+  const fit = isLandscapeLayout()
+    ? Math.min(
+        window.innerHeight / (panelHeight + 40),
+        (window.innerWidth * UI_SIDE_MAX_RATIO) / UI_SIDE_WIDTH,
+        UI_MAX_SCALE
+      )
+    : Math.min(
+        window.innerWidth / UI_BASE_WIDTH,
+        (window.innerHeight * UI_PANEL_MAX_RATIO) / panelHeight,
+        UI_MAX_SCALE
+      );
   const scale = fit > 1.02 ? fit : 1;
   document.body.style.zoom = scale === 1 ? "" : String(scale);
 
   // zoom は vh / vw に効かないので、拡大後の実寸を変数として配り直す。
-  // 高さで頭打ちになって幅が余ったぶんは、そのまま表と入力パネルを広げるのに使う。
+  // 縦向きで高さに頭打ちされて幅が余ったぶんは、表と入力パネルを広げるのに使う。
   const cssWidth = window.innerWidth / scale;
-  const contentWidth = Math.min(Math.max(UI_BASE_WIDTH, cssWidth), UI_MAX_CONTENT_WIDTH);
+  const contentWidth = isLandscapeLayout()
+    ? cssWidth
+    : Math.min(Math.max(UI_BASE_WIDTH, cssWidth), UI_MAX_CONTENT_WIDTH);
   root.setProperty("--app-max-width", `${contentWidth}px`);
   root.setProperty("--app-vh", `${window.innerHeight / scale}px`);
   root.setProperty("--app-vw", `${cssWidth}px`);

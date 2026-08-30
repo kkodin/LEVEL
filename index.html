@@ -145,6 +145,7 @@
         </table>
       </section>
 
+      <div class="side-stack">
       <section class="entry-panel" aria-label="入力パネル">
         <div class="entry-top">
           <div class="entry-readout">
@@ -186,6 +187,23 @@
           <button id="modeFs" class="btn-mode" type="button">FS</button>
         </div>
       </section>
+
+      <!-- 横向きのときだけ右カラムに出る情報パネル -->
+      <section class="info-pane" aria-label="情報">
+        <div class="info-block">
+          <h3>既知点との誤差</h3>
+          <div id="infoClosure" class="info-list"></div>
+        </div>
+        <div class="info-block">
+          <h3>登録済み基準点</h3>
+          <div id="infoPoints" class="info-list"></div>
+        </div>
+        <div class="info-block">
+          <h3>現在の状態</h3>
+          <div id="infoStatus" class="info-status"></div>
+        </div>
+      </section>
+      </div>
 
       <footer class="save-state" id="saveState">保存済み</footer>
 

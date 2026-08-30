@@ -78,7 +78,7 @@ sticky 時に下の行が見出しの背景を透けて見える。罫線は各�
 ファイルを変更したら必ず `service-worker.js` 先頭のキャッシュ名を上げること。
 
 ```javascript
-const CACHE_NAME = "level-book-vr0023";  // 番号を上げる
+const CACHE_NAME = "level-book-vr0024";  // 番号を上げる
 ```
 
 上げないとユーザーのブラウザに古いキャッシュが残り続ける。
@@ -191,6 +191,20 @@ xlsxのシート名は `YYYY.MM.DD_HHMM_名前`（旧形式の読み込みにも
 - `zoom` は `vh`/`vw` に効かないので `--app-vh` / `--app-vw` を配っている。
   **CSS に `100vh` / `100dvh` を直接書かないこと**
 - `ResizeObserver` の再発火ループを避けるため `lastUiViewport` で実サイズ変化のみ処理する
+
+## 横向きの2段組み
+
+`(orientation: landscape) and (min-width: 900px)` で、左=野帳表 / 右=入力パネル＋情報パネル
+の2段組みになる。**縦向きの見た目は変えていない。**
+
+- `.entry-panel` と `.info-pane` を `.side-stack` で包んでいる。
+  縦向きは `.side-stack { display: contents }` なので入力パネルは従来どおり下端固定。
+  横向きだけ `.side-stack` を右端に fixed した縦フレックスにする
+- `applyUiScale()` は `isLandscapeLayout()` で拡大率の式を分岐する
+  （横向きはパネルが縦に収まること＋右カラムが幅の45%以内、が条件）
+- 情報パネル（`renderInfoPane`）は 誤差一覧 / 基準点一覧 / 現在の状態。**表示専用**にしてある
+- `.entry-top` / `.keypad` は `max-width: 480px`、表の数値4列は `width: min(110px, 17%)`。
+  広い画面で無駄に引き伸ばさないため。狭い画面の見た目は変わらない
 
 ## 動作確認
 

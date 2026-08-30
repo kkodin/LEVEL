@@ -303,9 +303,12 @@ label span {
 }
 .level-table th:nth-child(1),
 .level-table th:nth-child(3) { background: #ccc9a0; }
+/* 数値4列は広い画面でも引き伸ばさず、余った幅は測点名列が受け取る。
+   狭い画面では従来どおり 17% ずつになる（375px幅で約64px）。 */
+.level-table th:nth-child(-n+4) { width: min(110px, 17%); }
 .level-table th:nth-child(5),
 .level-table td.point {
-  width: 32%;
+  width: auto;
   text-align: left;
 }
 .level-table td { background: #fff; }
@@ -352,6 +355,14 @@ label span {
 }
 /* 読み取り行と AC は、キーパッドと同じ4列グリッドに乗せて左右を完全に揃える。
    読み取り行が1〜3列目、AC が4列目（＝C/⌫/+/- と同じ幅・同じ位置）。 */
+/* 画面が広くてもキーパッドは広げすぎず、中央に寄せる */
+.entry-top,
+.keypad {
+  width: 100%;
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+}
 .entry-top {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1066,3 +1077,98 @@ body.input-reject::after {
 #basePointSheet.required #basePointSheetClose,
 #basePointSheet.required .point-picker-actions { display: none; }
 #basePointSheet.required .base-point-hint { color: #b3261e; font-weight: 700; }
+
+/* ── 情報パネル（横向きの右カラム） ──
+   縦向きでは出さない。.side-stack は display:contents なので、
+   入力パネルはこれまでどおり画面下端に固定される。 */
+.side-stack { display: contents; }
+.info-pane { display: none; }
+.info-block { margin-bottom: 10px; }
+.info-block h3 {
+  margin: 0 0 4px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.info-list { display: grid; gap: 3px; }
+.info-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  align-items: baseline;
+  padding: 4px 7px;
+  border: 1px solid #dbe3dd;
+  border-radius: 7px;
+  background: #fff;
+  font-size: 12px;
+}
+.info-row strong { font-size: 13px; font-weight: 700; }
+.info-row span { color: var(--muted); font-variant-numeric: tabular-nums; }
+.info-row .info-diff {
+  padding: 1px 6px;
+  border-radius: 999px;
+  color: #fff;
+  font-weight: 700;
+}
+.info-diff.ok { background: #1b7f4b; }
+.info-diff.warn { background: #b8860b; }
+.info-diff.error { background: var(--active); }
+.info-empty {
+  padding: 6px 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.info-status {
+  display: grid;
+  gap: 3px;
+  padding: 6px 8px;
+  border: 1px solid #dbe3dd;
+  border-radius: 7px;
+  background: #fff;
+  font-size: 12px;
+}
+.info-status div { display: grid; grid-template-columns: 5.5em 1fr; gap: 6px; }
+.info-status b { font-variant-numeric: tabular-nums; font-size: 13px; }
+
+/* ── 横向き（900px以上）は2段組み ──
+   左に野帳表、右に入力パネルと情報パネルを縦に積む。縦向きの見た目は変えない。 */
+@media (orientation: landscape) and (min-width: 900px) {
+  .app {
+    width: 100%;
+    max-width: none;
+    padding: 4px 12px 10px 12px;
+    padding-right: calc(var(--side-width, 436px) + 14px);
+  }
+  .side-stack {
+    display: flex;
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    width: var(--side-width, 436px);
+    flex-direction: column;
+    border-left: 1px solid #cfd8ce;
+    background: linear-gradient(180deg, #f2f7f3 0%, #e6eee9 100%);
+  }
+  .entry-panel {
+    position: static;
+    width: 100%;
+    padding: 8px 10px 6px;
+    transform: none;
+    border-top: 0;
+    box-shadow: none;
+  }
+  .entry-top,
+  .keypad { max-width: none; }
+  .info-pane {
+    display: block;
+    flex: 1;
+    min-height: 0;
+    padding: 0 10px calc(10px + env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+  /* 表は縦をめいっぱい使う */
+  .table-wrap { max-height: calc(var(--app-vh, 100vh) - 215px); }
+}
