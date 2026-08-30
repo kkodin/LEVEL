@@ -599,8 +599,7 @@ function lastFilledFsRow() {
 }
 
 function chooseBs() {
-  if (locked || isAwaitingConfirm()) return;
-  if (selected.field === "bs" && lastFilledFsRow() < 0) return;
+  if (locked || isBsKeyBlocked()) return;
   const origin = { ...selected };
   finalizeSelectedValue();
   // FS列から押したときは同じ行のBSへ。器高式では同一行のFSとBSが同じ移器点を指す。
@@ -719,12 +718,19 @@ function updateConfirmUi() {
   skip.classList.toggle("checked", skipConfirm);
   skip.setAttribute("aria-pressed", String(skipConfirm));
   $("#skipConfirmMark").textContent = skipConfirm ? "☑" : "☐";
-  const blocked = isAwaitingConfirm();
-  // FS列に数値が1つも無い＝GLが求まっていないので、BS を入れても器高を出せない。
-  // BS列にいるときはBSキーを押させない。
-  const noFsYet = selected.field === "bs" && lastFilledFsRow() < 0;
-  $("#modeBs").disabled = blocked || noFsYet;
-  $("#modeFs").disabled = blocked;
+  $("#modeBs").disabled = isBsKeyBlocked();
+  $("#modeFs").disabled = isAwaitingConfirm();
+}
+
+// BSキーを押せない条件。どれも「GLが求まっていない＝BSを入れても
+// IH(=GL+BS)を出せない」場面で、意味のない入力を防ぐためのもの。
+function isBsKeyBlocked() {
+  if (isAwaitingConfirm()) return true;
+  // FS列に数値が1つも無い＝GLがどこにも無い
+  if (selected.field === "bs") return lastFilledFsRow() < 0;
+  // FS列にいて、その行のFSがまだ空＝この行のGLが決まっていない
+  if (selected.field === "fs") return num(buffer || rows[selected.row]?.fs) === null;
+  return false;
 }
 
 // OK: 値を確定して確認待ちを解除する（BS・FSが押せるようになる）

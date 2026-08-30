@@ -66,7 +66,7 @@ git 操作は必ず `C:\Users\mande\開発\LEVEL` で行う。
 ファイルを変更したら必ず `service-worker.js` 先頭のキャッシュ名を上げること。
 
 ```javascript
-const CACHE_NAME = "level-book-vr0018";  // 番号を上げる
+const CACHE_NAME = "level-book-vr0019";  // 番号を上げる
 ```
 
 上げないとユーザーのブラウザに古いキャッシュが残り続ける。
@@ -122,7 +122,8 @@ const CACHE_NAME = "level-book-vr0018";  // 番号を上げる
 - **原則: FSに数値がある行＝GLが分かっている行。その行にBSを入れると `IH = GL + BS` が求まる**。
   逆に FS が空で基準行でもない行は GL が無く、BS を入れても意味がない。
   BSセルへ入る全経路でこれを守ること:
-  - BS ボタン → FS列に数値が1つも無ければ**無効**（`lastFilledFsRow() < 0`）
+  - BS ボタン → `isBsKeyBlocked()` で無効化する。
+    BS列にいて FS列に数値が1つも無いとき／**FS列にいてその行のFSが空のとき**
   - ↑↓・矢印キー・セル直タップ → `requestNewBaseGl()` で先に基準高を決めさせる
 - FS ボタンは `lastFilledFsRow() + 1` の行を選ぶ（行0はFSを持たないため行1以降に限定）
 - **BS ボタンは押した時のフォーカス列で行き先が変わる**
