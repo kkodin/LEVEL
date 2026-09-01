@@ -114,7 +114,7 @@ const CACHE_NAME = "level-book-vr0026";  // 番号を上げる
 表: `{ name, date, time, rows }`。`time` は作成時刻 `"HH:MM"`（24時制、無ければ空）。
 **新しく表を作る3経路（`addTable` / `finishSetupAndChooseBasePoint` / `startNewSite`）は
 必ず `nowTimeString()` を入れる**。古いデータへの後付けはしない。
-日付と同じく 表追加 / 名称変更 / ドロワー の3か所で編集できる。
+日付と同じく **表追加 / 名称変更 の2か所でだけ**編集できる（測定情報の欄は表示専用）。
 xlsxのシート名は `YYYY.MM.DD_HHMM_名前`（旧形式の読み込みにも対応）。
 
 `rows` の1行: `{ bs, ih, fs, gl, point, isBase }`。
@@ -178,6 +178,24 @@ xlsxのシート名は `YYYY.MM.DD_HHMM_名前`（旧形式の読み込みにも
 - 「確認せず次へ」☑（`skipConfirm`）にすると確認を挟まず直接 BS・FS を押せる。
   保存しないので読み込み直すと未チェックに戻る
 - 読み取り行の値は 40px・太字。小さくしないこと
+
+## 測定情報は表示専用（2026-09-01）
+
+作成日 / 作成時刻 / 現場名 / 作業名 の4欄は `updateMetaEditable()` が `disabled` にする。
+変えられるのは次だけ。**欄を常時編集可能に戻さないこと。**
+
+| 項目 | 変えられる場所 |
+|---|---|
+| 現場名（`meta.site`＝ファイル名） | 保存のダイアログ（`exportExcel`） |
+| 作業名（`table.name`）/ 作成日 / 作成時刻 | 表追加・名称変更のダイアログ（`addTable` / `renameTable`） |
+
+例外は新規現場の初期設定（ドロワーの `setup` モード）だけ。ここは4欄とも入力できる。
+`date`/`time` は `readOnly` だとピッカーから変えられるので `disabled` を使う。
+
+**画面上部の「既知点との誤差」バーと誤差モーダルは廃止済み**
+（`updateClosureDisplay` / `openErrorModal` / `exportErrorCsv` / `exportErrorExcel` を削除）。
+どの測点の誤差か分からない表示だったため。中身は表の `基準高`・`誤差mm` 列と
+xlsx の「誤差一覧」シートに統合済み。**復活させないこと。**
 
 ## 保護（ロック）
 

@@ -888,7 +888,24 @@ function syncMetaToInputs() {
   $("#surveyTime").value = normalizeTimeInput(table?.time);
   $("#siteName").value = meta.site || "";
   $("#surveyPlace").value = table?.name || meta.place || "";
+  updateMetaEditable();
   updateSurveySummary();
+}
+
+// 測定情報は普段「表示専用」。作業中に触って壊さないための措置。
+//   現場名（ファイル名）  … ファイルを保存するときだけ（exportExcel のダイアログ）
+//   作業名・作成日・作成時刻 … 表を追加するとき / 表の名称を変更するときだけ
+//     （addTable / renameTable のダイアログ）
+// 例外は新規現場の初期設定（ドロワーの setup モード）。ここは入力してもらう場所なので開ける。
+// date / time は readOnly だとブラウザのピッカーから変えられてしまうので disabled にする。
+function updateMetaEditable() {
+  const editable = drawerMode === "setup";
+  ["#surveyDate", "#surveyTime", "#siteName", "#surveyPlace"].forEach((sel) => {
+    const el = $(sel);
+    if (!el) return;
+    el.disabled = !editable;
+    el.classList.toggle("readonly", !editable);
+  });
 }
 
 function readMetaFromInputs() {
@@ -914,7 +931,6 @@ function updateSurveySummary() {
     ? `作成日：${formatSurveyDate(table.date)}${time ? ` ${time}` : ""}`
     : "";
   $("#surveySummary").innerHTML = [firstLine, secondLine].filter(Boolean).map(escapeHtml).join("<br>");
-  updateClosureDisplay();
 }
 
 // 作成時刻は24時制の "HH:MM"。"H:MM" や "HHMM" も受け付けて整える。
@@ -967,6 +983,7 @@ function openDrawer(mode = "normal", row = null) {
   updateSavePointButton();
   setDrawerAccordion(drawerMode === "setup" || drawerMode === "register" ? "info" : "points");
   if (drawerMode === "setup" || drawerMode === "register") window.setTimeout(() => $("#savedPointName").focus(), 0);
+  updateMetaEditable();
   $("#drawer").classList.add("open");
   $("#drawerBackdrop").classList.add("open");
 }
@@ -985,6 +1002,7 @@ function closeDrawer() {
   drawerMode = "normal";
   drawerTargetRow = null;
   drawerSaved = false;
+  updateMetaEditable();
   // 横向きなら左カラムへ出し直す
   placeDrawerContent();
 }
@@ -1460,8 +1478,10 @@ function bind() {
     $("#savedPointValue").value = value;
     updateSavePointButton();
   });
-  ["surveyDate", "siteName", "surveyPlace"].forEach((id) => {
+  ["surveyDate", "surveyTime", "siteName", "surveyPlace"].forEach((id) => {
     $(`#${id}`).addEventListener("input", () => {
+      // 普段この4つは disabled（updateMetaEditable）。開くのは新規現場の初期設定のときだけ。
+      if ($(`#${id}`).disabled) return;
       readMetaFromInputs();
       if (tables[activeTableIndex]) {
         tables[activeTableIndex].date = $("#surveyDate").value || tables[activeTableIndex].date || todayString();
@@ -1522,10 +1542,6 @@ function bind() {
   $("#basePointNewValue").addEventListener("keydown", (event) => {
     if (event.key === "Enter") addBasePointFromSheet();
   });
-  $("#errorModalClose").addEventListener("click", closeErrorModal);
-  $("#errorModal").addEventListener("click", (e) => { if (e.target === e.currentTarget) closeErrorModal(); });
-  $("#errorModalCsv").addEventListener("click", exportErrorCsv);
-  $("#errorModalExcel").addEventListener("click", exportErrorExcel);
   $("#importCsv").addEventListener("click", () => {
     startupImport = drawerMode === "setup";
     $("#csvFile").click();
@@ -1772,14 +1788,26 @@ function excelFilename() {
   return `${site}.xlsx`;
 }
 
+// 現場名（＝ファイル名）はここでだけ変えられる。
+// 普段は測定情報の欄が disabled なので、保存のたびに名前を確認してもらう形にしている。
 function exportExcel() {
   finalizeSelectedValue();
   calculate();
-  readMetaFromInputs();
-  if (!meta.date) meta.date = todayString();
-  syncMetaToInputs();
-  syncActiveTable();
-  download(excelFilename(), new Blob([buildXlsxWorkbook()], { type: XLSX_MIME }), XLSX_MIME);
+  showInputModal(
+    "ファイルを保存",
+    [{ id: "modal-site-name", label: "現場名（ファイル名）", value: meta.site || "", type: "text" }],
+    (values) => {
+      const site = (values["modal-site-name"] || "").trim();
+      if (!site) return;
+      meta.site = site;
+      if (!meta.date) meta.date = todayString();
+      syncMetaToInputs();
+      syncActiveTable();
+      renderTableSelect();
+      download(excelFilename(), new Blob([buildXlsxWorkbook()], { type: XLSX_MIME }), XLSX_MIME);
+      saveSoon();
+    }
+  );
 }
 
 function buildXlsxWorkbook() {
@@ -2429,21 +2457,6 @@ function renderInfoStatus() {
   ].join("");
 }
 
-function updateClosureDisplay() {
-  const results = computeClosureAll();
-  const summary = $("#surveySummary");
-  if (!results.length || !summary) return;
-
-  const worst = results.reduce((a, b) => Math.abs(b.diff) > Math.abs(a.diff) ? b : a);
-
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "closure-trigger";
-  btn.innerHTML = `既知点との誤差　<span class="closure-badge ${closureClass(worst.diff)}">${signedMm(worst.diff)}</span>`;
-  btn.addEventListener("click", openErrorModal);
-  summary.appendChild(btn);
-}
-
 // ── Point name picker ──────────────────────────────────────────────────────
 function openPointPicker(row) {
   pickerTargetRow = row;
@@ -2526,54 +2539,6 @@ function confirmPointPicker(name) {
 }
 
 // ── Error comparison modal ─────────────────────────────────────────────────
-function openErrorModal() {
-  const results = computeClosureAll();
-  const body = $("#errorModalBody");
-  if (!results.length) {
-    body.innerHTML = "<p>既知点との照合データがありません</p>";
-  } else {
-    const rowsHtml = results.map(({ point, ref, measured, diff }) => `<tr>
-        <td>${escapeHtml(point)}</td>
-        <td>${ref.toFixed(3)}</td>
-        <td>${measured.toFixed(3)}</td>
-        <td><span class="closure-badge ${closureClass(diff)}">${signedMm(diff)}</span></td>
-      </tr>`).join("");
-    body.innerHTML = `<table class="error-table">
-      <thead><tr><th>測点名</th><th>既知GL</th><th>測定GL</th><th>誤差(mm)</th></tr></thead>
-      <tbody>${rowsHtml}</tbody>
-    </table>`;
-  }
-  $("#errorModal").classList.remove("hidden");
-}
-
-function closeErrorModal() {
-  $("#errorModal").classList.add("hidden");
-}
-
-function exportErrorCsv() {
-  const results = computeClosureAll();
-  if (!results.length) return;
-  const header = "測点名,既知GL,測定GL,誤差(mm)\n";
-  const body = results.map(({ point, ref, measured, diff }) => {
-    const mm = Math.round(diff * 1000);
-    return `${point},${ref.toFixed(3)},${measured.toFixed(3)},${mm >= 0 ? "+" : "-"}${Math.abs(mm)}`;
-  }).join("\n");
-  const site = sanitizeFilename(meta.site || "現場名未入力");
-  download(`${site}_誤差一覧.csv`, `﻿${header}${body}`, "text/csv;charset=utf-8");
-}
-
-function exportErrorExcel() {
-  const results = computeClosureAll();
-  if (!results.length) return;
-  const workbook = xlsxPackage([{ name: "誤差一覧", rows: closureSheetRows(results) }]);
-  const site = sanitizeFilename(meta.site || "現場名未入力");
-  download(`${site}_誤差一覧.xlsx`, new Blob([workbook], { type: XLSX_MIME }), XLSX_MIME);
-}
-
-// ── Inline modal (replaces window.prompt / window.confirm) ────────────────
-let _modalCallback = null;
-let _modalFields = [];
-
 function showConfirmModal(title, body, onConfirm) {
   _modalCallback = onConfirm;
   _modalFields = [];

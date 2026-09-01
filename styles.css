@@ -240,6 +240,16 @@ input:focus {
   grid-template-columns: 1fr;
   gap: 6px;
 }
+/* 測定情報は普段は表示専用。触れないことが見て分かるようにする。
+   現場名は保存ダイアログ、作業名・作成日・作成時刻は表の追加／名称変更ダイアログで変える。 */
+.meta-fields input:disabled {
+  border-style: dashed;
+  background: #eceee9;
+  color: #46564f;
+  opacity: 1;               /* ブラウザ既定の薄い文字だと読めないので戻す */
+  -webkit-text-fill-color: #46564f;
+  cursor: default;
+}
 .base-bar {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -912,99 +922,6 @@ body.input-reject::after {
   grid-template-columns: 1fr;
 }
 
-/* ── Error comparison modal ── */
-.error-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  background: rgba(22, 34, 28, 0.52);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
-}
-.error-modal.hidden { display: none; }
-.error-modal-sheet {
-  width: min(420px, 100%);
-  max-height: calc(var(--app-vh, 100vh) * 0.8);
-  border-radius: 14px 14px 0 0;
-  background: #fff;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: 0 -8px 32px rgba(0,0,0,0.22);
-}
-.error-modal-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 14px 10px;
-  border-bottom: 1px solid #cfd8ce;
-  flex-shrink: 0;
-}
-.error-modal-head h3 {
-  margin: 0;
-  font-size: 16px;
-  color: var(--ink);
-}
-.error-modal-head button {
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  font-size: 20px;
-}
-.error-modal-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 10px 12px;
-  min-height: 0;
-}
-.error-modal-body p {
-  margin: 0;
-  padding: 24px 0;
-  text-align: center;
-  color: var(--muted);
-  font-size: 14px;
-}
-.error-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-.error-table th {
-  padding: 6px 6px 4px;
-  border-bottom: 2px solid #cfd8ce;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 800;
-  text-align: center;
-  white-space: nowrap;
-}
-.error-table th:first-child { text-align: left; }
-.error-table td {
-  padding: 7px 6px;
-  border-bottom: 1px solid #e4ece6;
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-.error-table td:first-child {
-  text-align: left;
-  font-weight: 700;
-  max-width: 100px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.error-modal-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
-  border-top: 1px solid #cfd8ce;
-  flex-shrink: 0;
-}
-.error-modal-actions button { min-height: 46px; font-size: 15px; }
 .btn-secondary {
   border-color: #cfd8ce;
   background: #e4ece6;
