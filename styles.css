@@ -435,6 +435,14 @@ body.show-wide .level-table td.wide-col { display: table-cell; }
   font-size: 22px;
   font-weight: 700;
 }
+/* 1行目（基準点の行）の測点名と、保護中は編集できない。
+   触れないことが見て分かるように背景を落とす。値は基準点の設定から選ぶ。 */
+.entry-readout input.readonly {
+  border-style: dashed;
+  background: #eceee9;
+  color: var(--muted);
+  cursor: default;
+}
 .entry-readout #activeType {
   color: #000;
   font-size: 18px;

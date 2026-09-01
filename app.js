@@ -469,7 +469,15 @@ function selectCell(row, field) {
 function updateReadout() {
   const row = rows[selected.row] || blankRow();
   $("#activeType").textContent = selected.field.toUpperCase();
-  $("#activePoint").value = row.point || "";
+  const nameInput = $("#activePoint");
+  nameInput.value = row.point || "";
+  // 1行目は基準点の行。測点名とGLは「登録済みの基準点から選ぶ」ものなので、
+  // 読み取り行の測点名欄からも書き換えられないようにする。
+  // キーパッド経路は isBasePointCell() が塞いでいるが、この入力欄だけ素通しだった。
+  const fixedName = isBasePointCell(selected.row, "point");
+  nameInput.readOnly = fixedName || locked;
+  nameInput.classList.toggle("readonly", nameInput.readOnly);
+  nameInput.placeholder = fixedName ? "基準点から選択" : "測点名";
   $("#activeValue").textContent = buffer || row[selected.field] || "-";
 }
 
@@ -503,6 +511,9 @@ function finalizeSelectedValue() {
 }
 
 function commitPointName() {
+  if (locked) return;
+  // 1行目の測点名は基準点の設定からしか変えられない
+  if (isBasePointCell(selected.row, "point")) return;
   if (!rows[selected.row]) rows[selected.row] = blankRow();
   rows[selected.row].point = $("#activePoint").value;
   syncBaseInputs();
@@ -1475,6 +1486,11 @@ function bind() {
     render();
   });
   $("#activePoint").addEventListener("input", commitPointName);
+  // 1行目の測点名欄は入力できないので、タップされたら選び直す画面へ案内する
+  $("#activePoint").addEventListener("click", () => {
+    if (locked) return;
+    if (isBasePointCell(selected.row, "point")) openBasePointSheet(0, !hasBasePoint(0));
+  });
   $("#modeBs").addEventListener("click", chooseBs);
   $("#modeFs").addEventListener("click", chooseFs);
   $("#prevRow").addEventListener("click", () => moveRow(-1));

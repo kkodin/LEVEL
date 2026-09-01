@@ -190,8 +190,13 @@ xlsxのシート名は `YYYY.MM.DD_HHMM_名前`（旧形式の読み込みにも
 - 新規現場・表追加・表切替で行0に基準点が無ければ、`ensureBasePoint()` が
   基準点シートを **required モード**で開き、決まるまで閉じられない
   （`×` と「あとで設定する」を非表示、`closeBasePointSheet()` が案内を出して拒否）
-- **行0の GL と測点名はキーパッドから編集不可**（`isBasePointCell()`）
+- **行0の GL と測点名はどの経路からも編集不可**（`isBasePointCell()`）。
+  行0は「登録済みの基準点から選ぶ」行で、**編集できるのは BS の数値だけ**
 - 行0の GL セル／測点名セルをタップすると基準点選択シートが開く
+- **読み取り行の測点名入力 `#activePoint` も塞ぐこと**（2026-09-01 に開いていた穴）。
+  `updateReadout()` が行0と `locked` のとき `readOnly` にし、
+  `commitPointName()` の先頭でも `locked` / `isBasePointCell()` を見て弾く。
+  この欄は `input` で `rows[].point` を直接書き換えるので、ガードを外すと基準点名が壊れる
 
 ## 画面サイズへの追従
 
