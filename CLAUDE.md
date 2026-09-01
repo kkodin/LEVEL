@@ -8,8 +8,8 @@
 水準測量の野帳（器高式）をスマホで記録・計算するオフライン動作可能なPWA。
 
 - リモート: https://github.com/kkodin/LEVEL.git (branch: `main`)
-- **作業リポジトリ（ここでコミット・push する）**: `C:\Users\mande\開発\LEVEL`
-- **バージョン保管庫（Dropbox・git管理外）**: `C:\Users\mande\Dropbox\Documents\GITHUB\LEVEL\`
+- **作業リポジトリ（ここでコミット・push する）**: `C:\Users\OWNER\開発\LEVEL`
+- **バージョン保管庫（Dropbox・git管理外）**: `C:\Users\OWNER\Dropbox (個人用)\Documents\GITHUB\LEVEL\`
 
 **詳細な引継ぎは [仕様書.md](仕様書.md) を読むこと。** このファイルはその要約。
 
@@ -28,7 +28,7 @@ Dropbox\Documents\GITHUB\LEVEL\
 **スナップショットは改修が「終わった」状態を保存する。**
 `LEVEL_vrNNN\index.html` をそのまま開けばその版の完成品が動くこと。
 
-1. 作業リポジトリ `C:\Users\mande\開発\LEVEL` で改修する
+1. 作業リポジトリ `C:\Users\OWNER\開発\LEVEL` で改修する
 2. ブラウザで動作確認する
 3. ユーザーに確認する
 4. **ユーザーが明示的に「pushして」と言った時だけ** commit / `git push origin main` する
@@ -38,21 +38,24 @@ Dropbox\Documents\GITHUB\LEVEL\
 
 ### 版番号
 
-`LEVEL_vr000` から連番。最新は `LEVEL_vr001`（コミット `ecaed8e`）。
+`LEVEL_vr000` から連番。最新は `LEVEL_vr009`（コミット `acee0ab`）。
 
 ### Dropbox 内で git 操作をしないこと
 
-`C:\Users\mande\Dropbox\Documents\GITHUB\LEVEL` 直下は**バージョン保管庫専用**。
+`C:\Users\OWNER\Dropbox (個人用)\Documents\GITHUB\LEVEL` 直下は**バージョン保管庫専用**。
+**保管庫には `LEVEL_vrNNN` と `OLD` しか置かない**（root に作業ファイルを置かない）。
+別PCで再開するときは保管庫をコピーせず `git clone` すること（仕様書 第12章）。
+PCが変わるとユーザー名が変わるので、このファイルのパスも合わせて直す。
 ここに `.git` を置くと Dropbox の同期が `.git` 内のファイルを掴んで
 `index.lock` 競合・競合コピーの混入・リポジトリ破損を招くため、
-git 操作は必ず `C:\Users\mande\開発\LEVEL` で行う。
+git 操作は必ず `C:\Users\OWNER\開発\LEVEL` で行う。
 
 ## ファイル構成
 
 | ファイル | 役割 |
 |---------|------|
 | `index.html` | 全画面のマークアップ（表・入力パネル・各シート） |
-| `app.js` | 全ロジック（約2300行・単一ファイル、モジュールではなくグローバル関数） |
+| `app.js` | 全ロジック（約2700行・単一ファイル、モジュールではなくグローバル関数） |
 | `styles.css` | 全スタイル |
 | `service-worker.js` | オフラインキャッシュ |
 | `manifest.json` | PWA設定 |
@@ -82,6 +85,11 @@ const CACHE_NAME = "level-book-vr0026";  // 番号を上げる
 ```
 
 上げないとユーザーのブラウザに古いキャッシュが残り続ける。
+
+## 表の列
+
+`BS | IH | FS | GL | 測点名 | 誤差mm` の6列。誤差列は登録済み基準点と同名の測点にだけ
+mm 差を色付きで表示する読み取り専用の列で、狭い画面（スマホ）では出さない。
 
 ## 野帳のデータ構造（最重要）
 
@@ -213,7 +221,14 @@ grid-template-areas:
 - `applyUiScale()` の横向きの式は `min(画面高/(パネル高+300), 画面幅/980, 2.4)`。
   **拡大しすぎると表の行数が減る**ので表に300px残す
 - 情報パネル（`renderInfoPane`）は 誤差一覧 / 基準点一覧 / 現在の状態。**表示専用**
-- `.entry-top` / `.keypad` は `max-width: 480px`、表の数値4列は `width: min(110px, 17%)`
+- **表とテンキーは同じ幅で右端に揃える**。`.table-wrap` / `.entry-top` / `.keypad` の3つに
+  `max-width: var(--pad-max-width)` + `margin-left: auto` + `margin-right: 0`。
+  横向きの右カラムも `var(--pad-max-width)` 固定で、余りは左の情報パネルが受け取る
+- **表の列幅に `min(110px, 17%)` のような % 混じりの `min()` を使わないこと**。
+  `table-layout: fixed` では幅指定ごと無視され全列が均等割りになる。必ず素の px（`52px`）で書く
+- **最終行の下罫線は消さない**（表の終わりが分からなくなる）。消してよいのは最終列の右罫線だけ
+- 測点名の右に `誤差mm` 列がある（`diffCell()`）。`fields` には入れないので選択対象にならない。
+  スマホでは出さない（`applyUiScale()` が `body.show-diff` を付け外しする）
 
 ## 動作確認
 

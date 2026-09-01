@@ -16,6 +16,8 @@
   --warn-dark: #c44708;
   --selected-row-bg: rgba(226, 29, 47, 0.055);
   --confirm-btn: #07866f;
+  /* 表とテンキーの共通幅。両方この幅で右端に揃える */
+  --pad-max-width: 480px;
 }
 
 * { box-sizing: border-box; }
@@ -262,6 +264,10 @@ label span {
 /* ── Level table ── */
 .table-wrap {
   max-height: 292px;
+  /* テンキーと同じ幅で右端に揃える（下の .entry-top / .keypad と対） */
+  max-width: var(--pad-max-width, 480px);
+  margin-left: auto;
+  margin-right: 0;
   overflow: auto;
   border: 2px solid #0f1c54;
   background: #fff;
@@ -290,7 +296,11 @@ label span {
 }
 .level-table th:last-child,
 .level-table td:last-child { border-right: 0; }
-.level-table tbody tr:last-child td { border-bottom: 0; }
+/* 誤差列を出していないとき（スマホ）は測点名列が最終列になる */
+body:not(.show-diff) .level-table th:nth-child(5),
+body:not(.show-diff) .level-table td.point { border-right: 0; }
+/* 最下行にも下罫線を残す（表の終わりが分かるように）。
+   .table-wrap の外枠は 2px の濃色なので、1px の細線と重なっても二重線には見えない。 */
 /* 見出し行は行が増えてスクロールしても常に見えるように固定する */
 .level-table thead th {
   position: sticky;
@@ -303,14 +313,31 @@ label span {
 }
 .level-table th:nth-child(1),
 .level-table th:nth-child(3) { background: #ccc9a0; }
-/* 数値4列は広い画面でも引き伸ばさず、余った幅は測点名列が受け取る。
-   狭い画面では従来どおり 17% ずつになる（375px幅で約64px）。 */
-.level-table th:nth-child(-n+4) { width: min(110px, 17%); }
+/* 数値4列は「-22.872」が収まる幅だけ取り、余りは測点名と誤差列に回す。
+   ここを min(110px, 17%) のように % 混じりの min() で書くと、
+   table-layout: fixed では幅指定ごと無視されて5列が均等割りになるので、
+   必ず素の px で書くこと。 */
+.level-table th:nth-child(-n+4) { width: 52px; }
 .level-table th:nth-child(5),
 .level-table td.point {
   width: auto;
   text-align: left;
 }
+/* 既知点との誤差列。狭い画面（スマホ）では列を増やす余地が無いので出さない。
+   表示の可否は applyUiScale() が body.show-diff で切り替える。 */
+.level-table th.diff-col,
+.level-table td.diff-col { display: none; }
+body.show-diff .level-table th.diff-col,
+body.show-diff .level-table td.diff-col { display: table-cell; }
+.level-table th.diff-col { width: 58px; }
+.level-table td.diff-col {
+  text-align: right;
+  font-weight: 800;
+  background: #f7faf8;
+}
+.level-table td.diff-col.ok { color: var(--accent); }
+.level-table td.diff-col.warn { color: #c8870a; }
+.level-table td.diff-col.error { color: var(--active); }
 .level-table td { background: #fff; }
 .level-table td.bs,
 .level-table td.fs { background: var(--input); }
@@ -355,13 +382,16 @@ label span {
 }
 /* 読み取り行と AC は、キーパッドと同じ4列グリッドに乗せて左右を完全に揃える。
    読み取り行が1〜3列目、AC が4列目（＝C/⌫/+/- と同じ幅・同じ位置）。 */
-/* 画面が広くてもキーパッドは広げすぎず、中央に寄せる */
+/* 画面が広くてもキーパッドは広げすぎない。
+   表とテンキーは同じ幅（--pad-max-width）で右端に揃える。
+   親（.app と .entry-panel、横向きではグリッドの右カラム）が同じ左右位置なので、
+   両方 margin-left:auto / margin-right:0 にすれば左右の端がぴったり合う。 */
 .entry-top,
 .keypad {
   width: 100%;
-  max-width: 480px;
+  max-width: var(--pad-max-width, 480px);
   margin-left: auto;
-  margin-right: auto;
+  margin-right: 0;
 }
 .entry-top {
   display: grid;
@@ -1152,7 +1182,9 @@ body.input-reject::after {
     height: var(--app-vh, 100vh);
     min-height: 0;
     padding: 4px 10px 6px 12px;
-    grid-template-columns: minmax(300px, 38%) minmax(0, 1fr);
+    /* 右カラムは表とテンキーの幅ちょうど。余った幅は左の情報パネルが受け取る
+       （表を右端に寄せたぶん、左に無駄な空きを作らないため） */
+    grid-template-columns: minmax(300px, 1fr) var(--pad-max-width);
     grid-template-rows: auto auto minmax(0, 1fr) auto auto;
     grid-template-areas:
       "summary table"

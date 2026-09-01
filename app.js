@@ -372,12 +372,13 @@ function render() {
       td.addEventListener("click", () => selectCell(rowIndex, field));
       tr.appendChild(td);
     });
+    tr.appendChild(diffCell(closure));
     tbody.appendChild(tr);
     if (closure && expandedClosureRows.has(rowIndex)) {
       const expandTr = document.createElement("tr");
       expandTr.className = "closure-expand-row";
       const expandTd = document.createElement("td");
-      expandTd.colSpan = 5;
+      expandTd.colSpan = 6;
       expandTd.innerHTML = `既知 ${closure.ref.toFixed(3)}　測定 ${closure.measured.toFixed(3)}　誤差 <span class="closure-badge ${closureClass(closure.diff)}">${signedMm(closure.diff)}</span>`;
       expandTr.appendChild(expandTd);
       tbody.appendChild(expandTr);
@@ -397,6 +398,7 @@ function render() {
       });
       tr.appendChild(td);
     });
+    tr.appendChild(diffCell(null));
     tbody.appendChild(tr);
   }
   updateReadout();
@@ -408,6 +410,18 @@ function render() {
   renderTableSelect();
   updateSavePointButton();
   updateRowHighlights();
+}
+
+// 既知点との誤差列のセル。登録済み基準点と同名の測点にだけ mm 差を出す。
+// 表示するかどうかは CSS（body.show-diff）が決めるので、ここでは常に作る。
+function diffCell(closure) {
+  const td = document.createElement("td");
+  td.className = "diff-col";
+  if (closure) {
+    td.classList.add(closureClass(closure.diff));
+    td.textContent = signedMm(closure.diff).replace(" mm", "");
+  }
+  return td;
 }
 
 function selectCell(row, field) {
@@ -2605,6 +2619,7 @@ const UI_MAX_SCALE = 2.4;         // 拡大しすぎないための上限
 const UI_MAX_CONTENT_WIDTH = 900; // 横に間延びさせないための上限（縦向き）
 const UI_LAND_TABLE_MIN = 300;    // 横向きで表に最低限残したい高さ
 const UI_LAND_BASE_WIDTH = 980;   // 横向きで2段組みが窮屈にならない最低幅
+const UI_DIFF_COL_MIN = 520;      // 誤差列を出す最低幅（これ未満＝スマホでは出さない）
 
 // 横向き2段組みのレイアウトが効いているか（styles.css のメディアクエリと同条件）
 function isLandscapeLayout() {
@@ -2647,6 +2662,8 @@ function applyUiScale() {
   // zoom は vh / vw に効かないので、拡大後の実寸を変数として配り直す。
   // 縦向きで高さに頭打ちされて幅が余ったぶんは、表と入力パネルを広げるのに使う。
   const cssWidth = window.innerWidth / scale;
+  // 誤差列は幅に余裕があるときだけ出す。スマホでは列を増やす余地が無いので出さない。
+  document.body.classList.toggle("show-diff", cssWidth >= UI_DIFF_COL_MIN);
   const contentWidth = isLandscapeLayout()
     ? cssWidth
     : Math.min(Math.max(UI_BASE_WIDTH, cssWidth), UI_MAX_CONTENT_WIDTH);
