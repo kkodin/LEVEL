@@ -51,7 +51,7 @@
           <section id="drawerInfoSection" class="accordion-section open">
             <button id="toggleInfo" class="accordion-toggle" type="button" data-accordion="info" aria-expanded="true">測点情報</button>
             <div class="accordion-body">
-              <section class="meta-bar" aria-label="測定情報">
+              <section id="metaBar" class="meta-bar" aria-label="測定情報">
                 <h3>測定情報</h3>
                 <div class="meta-fields">
                   <label>
@@ -72,11 +72,11 @@
                   </label>
                 </div>
               </section>
-              <div class="drawer-actions">
+              <div id="drawerActions" class="drawer-actions">
                 <button id="exportExcel" type="button">保存</button>
                 <button id="importCsv" type="button">読込</button>
               </div>
-              <div class="point-entry">
+              <div id="pointEntry" class="point-entry">
                 <div class="point-entry-fields">
                   <label>
                     <span>測点名</span>
@@ -193,12 +193,14 @@
       <!-- 横向きのときだけ右カラムに出る情報パネル -->
       <section class="info-pane" aria-label="情報">
         <div class="info-block">
-          <h3>既知点との誤差</h3>
-          <div id="infoClosure" class="info-list"></div>
+          <h3>保存・読込</h3>
+          <div id="slotMeta"></div>
+          <div id="slotActions"></div>
         </div>
         <div class="info-block">
-          <h3>登録済み基準点</h3>
-          <div id="infoPoints" class="info-list"></div>
+          <h3>基準点</h3>
+          <div id="slotPointEntry"></div>
+          <div id="slotPointList"></div>
         </div>
         <div class="info-block">
           <h3>現在の状態</h3>

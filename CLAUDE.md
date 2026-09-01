@@ -221,7 +221,15 @@ grid-template-areas:
 - `info` を2行にまたがせて左カラムの残りを全部使う
 - `applyUiScale()` の横向きの式は `min(画面高/(パネル高+300), 画面幅/980, 2.4)`。
   **拡大しすぎると表の行数が減る**ので表に300px残す
-- 情報パネル（`renderInfoPane`）は 誤差一覧 / 基準点一覧 / 現在の状態。**表示専用**
+- **横向きではドロワー（アコーディオン）を使わない。** `placeDrawerContent()` が
+  `#metaBar` `#drawerActions` `#pointEntry` `#pointList` を左カラムの `#slot*` へ**移動**する
+  （複製しない。複製すると入力値の同期ずれが起きる）。`body.inline-panel` が付き、
+  CSS が取っ手ボタンとドロワーを隠す
+- **`openDrawer()` は必ず `placeDrawerContent(true)` で中身をドロワーへ戻してから開くこと。**
+  `setup` / `base` / `register` はドロワー内の要素を使うため。`closeDrawer()` で戻す
+- 情報パネルは 保存・読込 / 基準点 / 現在の状態 の3ブロック。
+  「既知点との誤差」一覧は表の `基準高`・`誤差mm` 列に、
+  「登録済み基準点」（表示専用）は `#pointList` に統合済み。**復活させないこと**
 - **表とテンキーは同じ幅で右端に揃える**。`.table-wrap` / `.entry-top` / `.keypad` の3つに
   `max-width: var(--pad-max-width)` + `margin-left: auto` + `margin-right: 0`。
   横向きの右カラムも `var(--pad-max-width)` 固定で、余りは左の情報パネルが受け取る

@@ -1234,3 +1234,32 @@ body.input-reject::after {
     overflow-y: auto;
   }
 }
+
+/* ── 横向き（PC・タブレット）のアコーディオン廃止 ──
+   ドロワーの中身は placeDrawerContent() が左カラムの info-pane へ移す。
+   body.inline-panel は「中身を左カラムに出している」状態を表す。
+   ドロワーを開く必要があるモード（setup / base / register）では
+   openDrawer() が中身を戻し、このクラスも外れるので下の指定は効かなくなる。 */
+.inline-panel .edge-open,
+.inline-panel #drawer,
+.inline-panel .drawer-backdrop { display: none; }
+
+/* 左カラムに出したときは、ドロワー前提の余白・高さ制限を外す */
+/* 大画面では左カラムが広くなりすぎるので、中身は読みやすい幅で頭打ちにする */
+.inline-panel .info-pane > .info-block { max-width: 620px; }
+.inline-panel .info-pane .meta-bar {
+  margin: 0 0 8px;
+  padding-top: 0;
+  border-top: 0;
+}
+.inline-panel .info-pane .meta-bar h3 { display: none; }
+/* 左カラムは幅があるので、測定情報は2列に畳んで縦を詰める
+   （作成日・作成時刻／現場名・作業名 の2段になる） */
+.inline-panel .info-pane .meta-fields { grid-template-columns: 1fr 1fr; }
+.inline-panel .info-pane .drawer-actions { margin: 0; }
+.inline-panel .info-pane .point-entry { margin-bottom: 8px; }
+.inline-panel .info-pane .point-list {
+  max-height: none;   /* 情報パネル自体がスクロールするので個別の高さ制限は要らない */
+  padding-bottom: 4px;
+  overflow: visible;
+}

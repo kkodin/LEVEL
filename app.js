@@ -938,6 +938,8 @@ function formatSurveyDate(value) {
 }
 
 function openDrawer(mode = "normal", row = null) {
+  // 横向きで左カラムに出している中身を、いったんドロワーへ戻してから開く
+  placeDrawerContent(true);
   drawerMode = mode;
   drawerTargetRow = row;
   drawerSaved = false;
@@ -972,6 +974,8 @@ function closeDrawer() {
   drawerMode = "normal";
   drawerTargetRow = null;
   drawerSaved = false;
+  // 横向きなら左カラムへ出し直す
+  placeDrawerContent();
 }
 
 function openPointDrawer(row) {
@@ -2350,42 +2354,45 @@ function computeClosureAll() {
   return [...seen.values()];
 }
 
+// ── ドロワーの中身の置き場所 ──
+// 横向き（PC・タブレット）は画面に余裕があるので、アコーディオンのドロワーを使わず
+// 中身をそのまま左カラムに並べる。縦向き（スマホ）は従来どおりドロワーに戻す。
+// 要素を複製せず「同じノードを移動」しているので、入力値の同期ずれが起きない。
+const DRAWER_SLOTS = [
+  ["#metaBar", "#slotMeta"],
+  ["#drawerActions", "#slotActions"],
+  ["#pointEntry", "#slotPointEntry"],
+  ["#pointList", "#slotPointList"],
+];
+let drawerMoves = [];
+
+function initDrawerPlacement() {
+  drawerMoves = DRAWER_SLOTS.map(([nodeSel, slotSel]) => ({
+    node: $(nodeSel),
+    slot: $(slotSel),
+    home: $(nodeSel)?.parentElement || null,
+  })).filter((m) => m.node && m.slot && m.home);
+}
+
+// forceDrawer: ドロワーを開くときは、横向きでも中身を必ずドロワーへ戻す。
+// setup / base / register などのモードが #savedPointName などを使うため。
+function placeDrawerContent(forceDrawer = false) {
+  const useDrawer = forceDrawer || !isLandscapeLayout();
+  drawerMoves.forEach(({ node, slot, home }) => {
+    const target = useDrawer ? home : slot;
+    // DRAWER_SLOTS の順に appendChild するので、元の並び順のまま戻る
+    if (node.parentElement !== target) target.appendChild(node);
+  });
+  document.body.classList.toggle("inline-panel", !useDrawer);
+}
+
 // ── 情報パネル（横向きの右カラム） ──
 // 作業中に見えていて役に立つものだけを出す。誤操作を避けるため表示専用。
+// 「既知点との誤差」の一覧は表の 基準高 / 誤差mm 列に統合したので持たない。
+// 「登録済み基準点」の表示専用リストもドロワーの登録済測点（#pointList・削除可）に
+// 統合したので持たない。横向きでは #pointList をそのまま左カラムへ移して使う。
 function renderInfoPane() {
-  renderInfoClosure();
-  renderInfoPoints();
   renderInfoStatus();
-}
-
-function renderInfoClosure() {
-  const list = $("#infoClosure");
-  if (!list) return;
-  const results = computeClosureAll();
-  if (!results.length) {
-    list.innerHTML = `<p class="info-empty">既知点と同名の測点がまだありません</p>`;
-    return;
-  }
-  list.innerHTML = results.map((item) => `
-    <div class="info-row">
-      <strong>${escapeHtml(item.point)}</strong>
-      <span class="info-diff ${closureClass(item.diff)}">${escapeHtml(signedMm(item.diff))}</span>
-      <span>既知 ${item.ref.toFixed(3)}　実測 ${item.measured.toFixed(3)}</span>
-    </div>`).join("");
-}
-
-function renderInfoPoints() {
-  const list = $("#infoPoints");
-  if (!list) return;
-  if (!savedPoints.length) {
-    list.innerHTML = `<p class="info-empty">基準点が登録されていません</p>`;
-    return;
-  }
-  list.innerHTML = savedPoints.map((point) => `
-    <div class="info-row">
-      <strong>${escapeHtml(point.name)}</strong>
-      <span>GL ${escapeHtml(point.value)}</span>
-    </div>`).join("");
 }
 
 function renderInfoStatus() {
@@ -2675,6 +2682,8 @@ function applyUiScale() {
   // 基準高・誤差の2列は幅に余裕があるときだけ出す。
   // スマホでは列を増やす余地が無いので出さない。
   document.body.classList.toggle("show-wide", cssWidth >= UI_WIDE_COL_MIN);
+  // 縦横が変わったらドロワーの中身の置き場所も切り替える（開いている間は動かさない）
+  if (!$("#drawer").classList.contains("open")) placeDrawerContent();
   const contentWidth = isLandscapeLayout()
     ? cssWidth
     : Math.min(Math.max(UI_BASE_WIDTH, cssWidth), UI_MAX_CONTENT_WIDTH);
@@ -2696,6 +2705,8 @@ function scheduleUiScale() {
 
 load();
 bind();
+initDrawerPlacement();
+placeDrawerContent();
 applyUiScale();
 window.addEventListener("resize", scheduleUiScale);
 window.addEventListener("orientationchange", scheduleUiScale);
