@@ -379,7 +379,7 @@ function render() {
       const expandTr = document.createElement("tr");
       expandTr.className = "closure-expand-row";
       const expandTd = document.createElement("td");
-      expandTd.colSpan = 7;
+      expandTd.colSpan = visibleColumnCount();
       expandTd.innerHTML = `既知 ${closure.ref.toFixed(3)}　測定 ${closure.measured.toFixed(3)}　誤差 <span class="closure-badge ${closureClass(closure.diff)}">${signedMm(closure.diff)}</span>`;
       expandTr.appendChild(expandTd);
       tbody.appendChild(expandTr);
@@ -417,6 +417,13 @@ function render() {
 // 測点名の右に足す2列（基準高・誤差mm）。
 // どちらも登録済み基準点と同名の測点にだけ値が入る読み取り専用の列。
 // 出すかどうかは CSS（body.show-wide）が決めるので、ここでは常に作る。
+// 展開行の colSpan は「いま見えている列数」に合わせること。
+// 基準高・誤差の2列を出していない（スマホ）のに colSpan=7 にすると、
+// ブラウザが幻の列を2つ作り、測点名列が縮んで表の右側に空欄ができる。
+function visibleColumnCount() {
+  return fields.length + (document.body.classList.contains("show-wide") ? 2 : 0);
+}
+
 function refCell(closure) {
   const td = document.createElement("td");
   td.className = "wide-col ref-col";
@@ -2662,7 +2669,11 @@ function applyUiScale() {
   const cssWidth = window.innerWidth / scale;
   // 基準高・誤差の2列は幅に余裕があるときだけ出す。
   // スマホでは列を増やす余地が無いので出さない。
-  document.body.classList.toggle("show-wide", cssWidth >= UI_WIDE_COL_MIN);
+  const wide = cssWidth >= UI_WIDE_COL_MIN;
+  const wideChanged = document.body.classList.contains("show-wide") !== wide;
+  document.body.classList.toggle("show-wide", wide);
+  // 列数が変わったら、展開行の colSpan を作り直すために描き直す
+  if (wideChanged && expandedClosureRows.size) render();
   // 縦横が変わったらドロワーの中身の置き場所も切り替える（開いている間は動かさない）
   if (!$("#drawer").classList.contains("open")) placeDrawerContent();
   const contentWidth = isLandscapeLayout()

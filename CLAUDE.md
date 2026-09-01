@@ -78,13 +78,22 @@ sticky 時に下の行が見出しの背景を透けて見える。罫線は各�
 
 ## Service Worker の更新（必須）
 
-ファイルを変更したら必ず `service-worker.js` 先頭のキャッシュ名を上げること。
+ファイルを変更したら必ず `service-worker.js` 先頭の `VERSION` を上げること。
 
 ```javascript
-const CACHE_NAME = "level-book-vr0026";  // 番号を上げる
+const VERSION = "0032";   // 番号を上げる
 ```
 
-上げないとユーザーのブラウザに古いキャッシュが残り続ける。
+**同時に `index.html` の `?v=` も同じ番号に揃えること。**
+
+```html
+<link rel="stylesheet" href="styles.css?v=0032">
+<script src="app.js?v=0032"></script>
+```
+
+キャッシュは Service Worker とブラウザのHTTPキャッシュの2層ある。
+SWのキャッシュ名だけ上げても、HTTPキャッシュは URL が変わらないと古いファイルを返す。
+`?v=` でURL自体を変えて両方に効かせている。`APP_FILES` も同じURLで登録すること。
 
 ## 表の列
 
@@ -261,8 +270,10 @@ grid-template-areas:
 - **最終行の下罫線は消さない**（表の終わりが分からなくなる）。消してよいのは最終列の右罫線だけ
 - 測点名の右に `基準高` と `誤差mm` の2列がある（`refCell()` / `diffCell()`）。
   **`fields` には入れない**ので選択・列移動・キー入力の対象にならない。
-  スマホでは出さない（`applyUiScale()` が `body.show-wide` を付け外しする）。
-  展開行（▼）の `colSpan` は 7
+  スマホでは出さない（`applyUiScale()` が `body.show-wide` を付け外しする）
+- 展開行（▼）の `colSpan` は **`visibleColumnCount()`**＝いま見えている列数。
+  **固定値にしないこと。** 5列しか出していないのに `colSpan=7` にすると
+  ブラウザが幻の列を2つ作り、測点名列が縮んで表の右側に空欄ができる
 
 ## 動作確認
 
