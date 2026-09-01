@@ -38,7 +38,7 @@ Dropbox\Documents\GITHUB\LEVEL\
 
 ### 版番号
 
-`LEVEL_vr000` から連番。最新は `LEVEL_vr009`（コミット `acee0ab`）。
+`LEVEL_vr000` から連番。最新は `LEVEL_vr010`（コミット `3e00ade`）。
 
 ### Dropbox 内で git 操作をしないこと
 
