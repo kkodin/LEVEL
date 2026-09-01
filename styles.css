@@ -296,9 +296,9 @@ label span {
 }
 .level-table th:last-child,
 .level-table td:last-child { border-right: 0; }
-/* 誤差列を出していないとき（スマホ）は測点名列が最終列になる */
-body:not(.show-diff) .level-table th:nth-child(5),
-body:not(.show-diff) .level-table td.point { border-right: 0; }
+/* 基準高・誤差列を出していないとき（スマホ）は測点名列が最終列になる */
+body:not(.show-wide) .level-table th:nth-child(5),
+body:not(.show-wide) .level-table td.point { border-right: 0; }
 /* 最下行にも下罫線を残す（表の終わりが分かるように）。
    .table-wrap の外枠は 2px の濃色なので、1px の細線と重なっても二重線には見えない。 */
 /* 見出し行は行が増えてスクロールしても常に見えるように固定する */
@@ -323,17 +323,22 @@ body:not(.show-diff) .level-table td.point { border-right: 0; }
   width: auto;
   text-align: left;
 }
-/* 既知点との誤差列。狭い画面（スマホ）では列を増やす余地が無いので出さない。
-   表示の可否は applyUiScale() が body.show-diff で切り替える。 */
-.level-table th.diff-col,
-.level-table td.diff-col { display: none; }
-body.show-diff .level-table th.diff-col,
-body.show-diff .level-table td.diff-col { display: table-cell; }
+/* 測点名の右に足す2列（基準高・誤差mm）。
+   狭い画面（スマホ）では列を増やす余地が無いので出さない。
+   表示の可否は applyUiScale() が body.show-wide で切り替える。 */
+.level-table th.wide-col,
+.level-table td.wide-col { display: none; }
+body.show-wide .level-table th.wide-col,
+body.show-wide .level-table td.wide-col { display: table-cell; }
+.level-table td.wide-col { background: #f7faf8; }
+/* 基準高＝登録済み基準点の既知GL。測定値ではないので数値列と同じ中央寄せにする */
+.level-table th.ref-col { width: 62px; }
+.level-table td.ref-col { color: #063f36; }
+/* 誤差は符号付きmm。読み違えないよう右寄せ・太字にして色で区分する */
 .level-table th.diff-col { width: 58px; }
 .level-table td.diff-col {
   text-align: right;
   font-weight: 800;
-  background: #f7faf8;
 }
 .level-table td.diff-col.ok { color: var(--accent); }
 .level-table td.diff-col.warn { color: #c8870a; }
