@@ -1617,13 +1617,35 @@ function startNewSite() {
 // スマホのExcelはSpreadsheetML(.xls)を開けず、PCでは拡張子不一致の警告が出るため、
 // 依存ライブラリなしで実体のある .xlsx (ZIP + OOXML) を組み立てる。
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-const XLSX_STYLE = { normal: 0, header: 1, num: 2, input: 3, text: 4, mm: 5 };
+const XLSX_STYLE = { normal: 0, header: 1, num: 2, input: 3, text: 4, mm: 5, int: 6, percent: 7 };
 
-// 基本情報シートの POINTS 一覧が始まる Excel の行番号。
-// basicSheetRows() の見出し8行（LEVEL_APP〜「測点名/数値」）の次から測点が並ぶ。
-// basicSheetRows() を増減したらこの値も合わせること。
-const XLSX_POINTS_ROW = 9;
-const XLSX_POINTS_RANGE = `'基本情報'!$A$${XLSX_POINTS_ROW}:$B$1000`;
+// 変位測量の管理値。基本情報シートの LIMIT / WARN に書き出して読み戻す。
+// 警告値は「管理値 × 割合」なので、割合だけ持てば足りる。
+const DEFAULT_LIMIT_MM = 45;
+const DEFAULT_WARN_RATIO = 0.8;
+
+// 基本情報シートの行番号。basicSheetRows() の並びと必ず揃えること。
+// 見出し10行（LEVEL_APP〜「測点名/数値」）の次から測点が並ぶ。
+const XLSX_LIMIT_ROW = 6;
+const XLSX_WARN_ROW = 7;
+const XLSX_POINTS_ROW = 11;
+const XLSX_BASIC_SHEET = "基本情報";
+const XLSX_POINTS_RANGE = `${sheetRef(XLSX_BASIC_SHEET)}!$A$${XLSX_POINTS_ROW}:$B$1000`;
+
+// 数式でシートを指すときの名前。シート名の ' は '' に重ねて escape する。
+function sheetRef(name) {
+  return `'${String(name || "").replace(/'/g, "''")}'`;
+}
+
+function limitMm() {
+  const parsed = num(meta.limit);
+  return parsed === null || parsed <= 0 ? DEFAULT_LIMIT_MM : parsed;
+}
+
+function warnRatio() {
+  const parsed = num(meta.warnRatio);
+  return parsed === null || parsed <= 0 || parsed > 1 ? DEFAULT_WARN_RATIO : parsed;
+}
 
 // 表シートの先頭に 日付 / 時刻 / 作業名 の3行を置き、4行目が BS…の見出し、5行目からデータ。
 // 見出しの行数を変えたらこの2つを直すだけで済むよう、行番号はここから計算する。
@@ -1712,8 +1734,15 @@ function zipStore(entries) {
   return out;
 }
 
+// 0 → A, 25 → Z, 26 → AA。変位グラフは測定回のぶんだけ列が伸びるので Z で止まらないこと。
 function columnLetter(index) {
-  return String.fromCharCode(65 + index);
+  let remain = index;
+  let letters = "";
+  do {
+    letters = String.fromCharCode(65 + (remain % 26)) + letters;
+    remain = Math.floor(remain / 26) - 1;
+  } while (remain >= 0);
+  return letters;
 }
 
 function xlsxBlank(style = "normal") {
@@ -1756,7 +1785,11 @@ function xlsxCellXml(cell, ref) {
   return `<c r="${ref}" s="${style}"/>`;
 }
 
-function xlsxSheetXml(sheetRows) {
+// 表シートの列幅。変位グラフは A列に測点名・以降は測定回なので別の幅を使う。
+const XLSX_TABLE_COLS = '<col min="1" max="4" width="11" customWidth="1"/><col min="5" max="5" width="20" customWidth="1"/><col min="6" max="6" width="11" customWidth="1"/><col min="7" max="7" width="9" customWidth="1"/>';
+const XLSX_WIDE_COLS = '<col min="1" max="1" width="16" customWidth="1"/><col min="2" max="60" width="12" customWidth="1"/>';
+
+function xlsxSheetXml(sheetRows, cols = XLSX_TABLE_COLS) {
   const body = sheetRows.map((cells, rowIndex) => {
     const rowNumber = rowIndex + 1;
     const cellsXml = cells
@@ -1765,12 +1798,12 @@ function xlsxSheetXml(sheetRows) {
     return `<row r="${rowNumber}">${cellsXml}</row>`;
   }).join("");
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="4" width="11" customWidth="1"/><col min="5" max="5" width="20" customWidth="1"/><col min="6" max="6" width="11" customWidth="1"/><col min="7" max="7" width="9" customWidth="1"/></cols><sheetData>${body}</sheetData></worksheet>`;
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols>${cols}</cols><sheetData>${body}</sheetData></worksheet>`;
 }
 
 function xlsxStylesXml() {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="0.000"/><numFmt numFmtId="165" formatCode="+0;-0;+0"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Yu Gothic"/></font><font><b/><sz val="11"/><name val="Yu Gothic"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9D8BD"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFBC4"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="164" fontId="0" fillId="3" borderId="0" xfId="0" applyNumberFormat="1" applyFill="1"/><xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="3"><numFmt numFmtId="164" formatCode="0.000"/><numFmt numFmtId="165" formatCode="+0;-0;+0"/><numFmt numFmtId="166" formatCode="0"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Yu Gothic"/></font><font><b/><sz val="11"/><name val="Yu Gothic"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9D8BD"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFBC4"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="8"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="164" fontId="0" fillId="3" borderId="0" xfId="0" applyNumberFormat="1" applyFill="1"/><xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="9" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
 }
 
 function xlsxPackage(sheets) {
@@ -1795,7 +1828,7 @@ function xlsxPackage(sheets) {
     { name: "xl/styles.xml", bytes: encoder.encode(xlsxStylesXml()) },
     ...sheets.map((sheet, index) => ({
       name: `xl/worksheets/sheet${index + 1}.xml`,
-      bytes: encoder.encode(xlsxSheetXml(sheet.rows))
+      bytes: encoder.encode(xlsxSheetXml(sheet.rows, sheet.cols))
     }))
   ];
   return zipStore(entries);
@@ -1813,11 +1846,19 @@ function exportExcel() {
   calculate();
   showInputModal(
     "ファイルを保存",
-    [{ id: "modal-site-name", label: "現場名（ファイル名）", value: meta.site || "", type: "text" }],
+    [
+      { id: "modal-site-name", label: "現場名（ファイル名）", value: meta.site || "", type: "text" },
+      { id: "modal-limit", label: "管理値 (mm)", value: String(limitMm()), type: "number" },
+      { id: "modal-warn", label: "警告値 (%)", value: String(Math.round(warnRatio() * 100)), type: "number" }
+    ],
     (values) => {
       const site = (values["modal-site-name"] || "").trim();
       if (!site) return;
       meta.site = site;
+      // 空欄・変な値は既定に戻す（limitMm / warnRatio が弾く）
+      meta.limit = num(values["modal-limit"]);
+      const percent = num(values["modal-warn"]);
+      meta.warnRatio = percent === null ? null : percent / 100;
       if (!meta.date) meta.date = todayString();
       syncMetaToInputs();
       syncActiveTable();
@@ -1830,18 +1871,26 @@ function exportExcel() {
 
 function buildXlsxWorkbook() {
   const closureData = computeClosureAll();
-  const usedNames = new Set(["基本情報", "誤差一覧"]);
+  const usedNames = new Set([XLSX_BASIC_SHEET, DISPLACEMENT_SHEET, "誤差一覧"]);
+  // 変位グラフは表シートを名前で参照するので、シート名を先に確定させておく。
+  const tableSheets = tables.map((table, index) => ({
+    table,
+    index,
+    name: uniqueSheetName(tableSheetTitle(table, index), usedNames)
+  }));
+  const displacement = displacementSheetRows(tableSheets);
   const sheets = [
-    { name: "基本情報", rows: basicSheetRows() },
-    ...tables.map((table, index) => ({
-      name: uniqueSheetName(tableSheetTitle(table, index), usedNames),
-      rows: tableSheetRows(table)
-    })),
-    ...(closureData.length ? [{ name: "誤差一覧", rows: closureSheetRows(closureData) }] : [])
+    { name: XLSX_BASIC_SHEET, rows: basicSheetRows(), cols: XLSX_WIDE_COLS },
+    ...tableSheets.map(({ table, name }) => ({ name, rows: tableSheetRows(table) })),
+    ...(displacement ? [{ name: DISPLACEMENT_SHEET, rows: displacement, cols: XLSX_WIDE_COLS }] : []),
+    ...(closureData.length ? [{ name: "誤差一覧", rows: closureSheetRows(closureData), cols: XLSX_WIDE_COLS }] : [])
   ];
   return xlsxPackage(sheets);
 }
 
+// A列のタグ（LEVEL_APP / TITLE / … / POINTS）が読込側の目印。
+// C列は人が読むための説明で、読込では見ない。
+// **行を増減したら XLSX_LIMIT_ROW / XLSX_WARN_ROW / XLSX_POINTS_ROW を必ず直すこと。**
 function basicSheetRows() {
   return [
     [xlsxText("LEVEL_APP"), xlsxText("4")],
@@ -1849,8 +1898,10 @@ function basicSheetRows() {
     [xlsxText("SITE"), xlsxText(meta.site || "")],
     [xlsxText("DATE"), xlsxText(meta.date || "")],
     [xlsxText("PLACE"), xlsxText(meta.place || "")],
+    [xlsxText("LIMIT"), xlsxInteger(limitMm(), "int"), xlsxText("管理値 (mm)")],
+    [xlsxText("WARN"), xlsxNumber(warnRatio(), "percent"), xlsxText("警告値の割合")],
     [],
-    [xlsxText("POINTS")],
+    [xlsxText("POINTS"), xlsxText("初期値")],
     [xlsxText("測点名", "header"), xlsxText("数値", "header")],
     ...savedPoints.map((point) => [xlsxText(point.name), xlsxNumber(point.value)])
   ];
@@ -1865,6 +1916,107 @@ function tableSheetRows(table) {
     [xlsxText("作業名", "header"), xlsxText(table?.name || "")],
     ["BS", "IH", "FS", "GL", "測点名", "基準高", "誤差mm"].map((label) => xlsxText(label, "header")),
     ...xlsxRowsForRows(table.rows || [blankRow()])
+  ];
+}
+
+// ── 変位グラフシート ────────────────────────────────────────────────────────
+// 行=測点 / 列=測定回 に「初期値からの変位(mm)」を並べる。
+// 基準点として登録した値が初期値なので、表シートの 誤差mm 列がそのまま変位になる。
+//
+//   A          B                C            D          …
+// 1 作業名     路面変異測量初期値  路面変異測量  路面変異測量
+// 2 日時       8/25 21:30        8/25 22:25   8/26 21:20
+// 3 G1         0                 3            5
+// 4 G2         0                 3            3
+// 5 G3         0                 1            2
+// 6 管理値(mm) 45                45           45
+// 7 警告値(mm) 36                36           36
+//
+// 値は行番号ではなく INDEX+MATCH で測点名から引く。
+// **こうしないと Excel 側で行や測点を消したとたん #REF! だらけになる。**
+const DISPLACEMENT_SHEET = "変位グラフ";
+
+// グラフに出す測点。登録済みの基準点のうち、
+// 行0の器械据付基準（KBM など。常に変位0）を除き、どこかの表に出てくるものだけ。
+function displacementPoints(targetTables) {
+  const bases = new Set();
+  targetTables.forEach(({ table }) => {
+    const name = table?.rows?.[0]?.point;
+    if (name) bases.add(name);
+  });
+  const measured = new Set();
+  targetTables.forEach(({ table }) => {
+    (table?.rows || []).forEach((row, index) => {
+      if (index > 0 && row.point) measured.add(row.point);
+    });
+  });
+  return savedPoints
+    .map((point) => point.name)
+    .filter((name) => !bases.has(name) && measured.has(name));
+}
+
+// 「8/25 21:30」。日付が無ければ作業名で代用する。
+function displacementColumnLabel(table, index) {
+  const match = String(table?.date || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const day = match ? `${Number(match[2])}/${Number(match[3])}` : "";
+  const time = normalizeTimeInput(table?.time);
+  if (!day) return table?.name || `表${index + 1}`;
+  return time ? `${day} ${time}` : day;
+}
+
+// 表シートに載っている変位(mm)。読込直後などで GL が無ければ null。
+function displacementValue(table, pointName) {
+  const initial = num(savedPoints.find((point) => point.name === pointName)?.value);
+  if (initial === null) return null;
+  const row = (table?.rows || []).find((item) => item.point === pointName);
+  const gl = num(row?.gl);
+  return gl === null ? null : Math.round((gl - initial) * 1000);
+}
+
+function displacementSheetRows(tableSheets) {
+  // 1回しか測っていなければ変位を追えないので作らない。
+  if (tableSheets.length < 2) return null;
+  // 測った順に並べる。日付・時刻が無いものは元の並びのまま後ろへ（sort は安定）。
+  const ordered = [...tableSheets].sort((a, b) => {
+    const keyA = `${a.table?.date || "9999-99-99"} ${normalizeTimeInput(a.table?.time) || "99:99"}`;
+    const keyB = `${b.table?.date || "9999-99-99"} ${normalizeTimeInput(b.table?.time) || "99:99"}`;
+    return keyA < keyB ? -1 : keyA > keyB ? 1 : 0;
+  });
+  const points = displacementPoints(ordered);
+  if (!points.length) return null;
+
+  const limitCell = `${sheetRef(XLSX_BASIC_SHEET)}!$B$${XLSX_LIMIT_ROW}`;
+  const warnCell = `${sheetRef(XLSX_BASIC_SHEET)}!$B$${XLSX_WARN_ROW}`;
+  const limit = limitMm();
+  const warn = limit * warnRatio();
+
+  const nameRow = [xlsxText("作業名", "header"), ...ordered.map(({ table, index }) => xlsxText(table?.name || `表${index + 1}`))];
+  const labelRow = [xlsxText("日時", "header"), ...ordered.map(({ table, index }) => xlsxText(displacementColumnLabel(table, index)))];
+
+  const pointRows = points.map((name, pointIndex) => {
+    const line = pointIndex + 3;   // 1行目=作業名 / 2行目=日時 / 3行目から測点
+    return [
+      xlsxText(name, "header"),
+      ...ordered.map(({ name: sheetName, table }) => {
+        const sheet = sheetRef(sheetName);
+        const formula = `IFERROR(INDEX(${sheet}!$G:$G,MATCH($A${line},${sheet}!$E:$E,0)),"")`;
+        return xlsxFormula(formula, displacementValue(table, name), "mm");
+      })
+    ];
+  });
+
+  const limitRow = [xlsxText("管理値 (mm)", "header"), ...ordered.map(() => xlsxFormula(limitCell, limit, "int"))];
+  const warnRow = [xlsxText("警告値 (mm)", "header"), ...ordered.map(() => xlsxFormula(`${limitCell}*${warnCell}`, warn, "int"))];
+
+  return [
+    nameRow,
+    labelRow,
+    ...pointRows,
+    limitRow,
+    warnRow,
+    [],
+    [xlsxText(`※ 変位は「測定値 − 初期値」。管理値・警告値は ${XLSX_BASIC_SHEET}シートの LIMIT / WARN で変えられます`)],
+    [xlsxText("※ 値は測点名で引いているので、行や測点を消しても他の列は壊れません")]
   ];
 }
 
@@ -2093,11 +2245,11 @@ async function parseXlsx(bytes, filename) {
     const sheetXml = await zipEntryText(files, `xl/${target}`);
     if (!sheetXml) continue;
     const values = xlsxSheetGrid(sheetXml, sharedStrings);
-    if (index === 0 || sheetName === "基本情報") {
+    if (index === 0 || sheetName === XLSX_BASIC_SHEET) {
       readExcelBasicSheet(values, workbook, filename);
       continue;
     }
-    if (sheetName === "誤差一覧") continue;
+    if (isSummarySheetName(sheetName)) continue;
     const headerIndex = tableHeaderIndex(values);
     const tableMeta = tableMetaFromSheet(values, headerIndex, sheetName, workbook.meta.date);
     const dataRows = values.slice(headerIndex + 1).map((line) => blankRow({
@@ -2141,11 +2293,11 @@ function parseExcelXml(text, filename) {
   worksheets.forEach((sheet, index) => {
     const sheetName = sheet.getAttribute("ss:Name") || sheet.getAttribute("Name") || `表${index}`;
     const values = excelSheetValues(sheet);
-    if (index === 0 || sheetName === "基本情報") {
+    if (index === 0 || sheetName === XLSX_BASIC_SHEET) {
       readExcelBasicSheet(values, workbook, filename);
       return;
     }
-    if (sheetName === "誤差一覧") return;
+    if (isSummarySheetName(sheetName)) return;
     const headerIndex = tableHeaderIndex(values);
     const tableMeta = tableMetaFromSheet(values, headerIndex, sheetName, workbook.meta.date);
     const dataRows = values.slice(headerIndex + 1).map((line) => blankRow({
@@ -2165,7 +2317,8 @@ function readExcelBasicSheet(values, workbook, filename) {
   values.forEach((line) => {
     const tag = stripBom(line[0] || "").trim();
     if (!tag) return;
-    if (tag === "POINTS") {
+    // 見出しを「初期値」に書き換えたファイルも受ける（変位測量では初期値と呼ぶため）
+    if (tag === "POINTS" || tag === "初期値") {
       section = "POINTS";
       return;
     }
@@ -2173,6 +2326,8 @@ function readExcelBasicSheet(values, workbook, filename) {
     if (tag === "SITE") workbook.meta.site = line[1] || "";
     if (tag === "DATE") workbook.meta.date = normalizeDateInput(line[1] || "");
     if (tag === "PLACE") workbook.meta.place = line[1] || "";
+    if (tag === "LIMIT") workbook.meta.limit = num(line[1]);
+    if (tag === "WARN") workbook.meta.warnRatio = num(line[1]);
     if (section === "POINTS" && tag !== "測点名") {
       const name = line[0]?.trim();
       const value = fmtInput(line[1] || "");
@@ -2194,6 +2349,12 @@ function excelSheetValues(sheet) {
     });
     return values;
   });
+}
+
+// 野帳ではない集計シート。読込では表として取り込まない。
+// **新しい集計シートを足したらここにも必ず足すこと。**
+function isSummarySheetName(sheetName) {
+  return sheetName === "誤差一覧" || sheetName === DISPLACEMENT_SHEET;
 }
 
 // 表シートの見出し行（A列が "BS"）の位置。
