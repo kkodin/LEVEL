@@ -133,6 +133,28 @@ xlsxのシート名は `YYYY.MM.DD_HHMM_名前`（旧形式の読み込みにも
 **FS を消したら、その FS から求めた GL・IH も消える**（非基準行は `next.gl = ""`）。
 古い GL が残って誤った器高を出し続けないための処理なので、外さないこと。
 
+## xlsx の表シートの形
+
+```
+A          B      C     D      E       F       G
+1  日付      2026.09.02
+2  時刻      09:30
+3  作業名    1号線
+4  BS       IH    FS    GL     測点名   基準高   誤差mm   ← 見出し
+5  1.148    =…          10.000 KBM     =…      =…       ← データ1行目
+```
+
+- 行番号は `XLSX_TABLE_HEADER_ROW`(=4) / `XLSX_TABLE_FIRST_DATA_ROW`(=5) から計算する。
+  **`xlsxMeasurementRow()` に行番号を直書きしないこと**
+- `基準高` は `VLOOKUP` で基本情報シートの基準点一覧を引く。
+  **`basicSheetRows()` の行数を変えたら `XLSX_POINTS_ROW`（=9）も直すこと**
+- `誤差mm` は `ROUND((GL-基準高)*1000,0)`。表示は `+0;-0;+0`（styles の numFmt 165）
+- この2列は確認用の計算列。**読込側（`parseXlsx` / `parseExcelXml`）は A〜E しか見ない**
+- 見出し行は `tableHeaderIndex()`（A列が `BS` の行）で探すので、
+  見出しが1行目だった旧形式のファイルも読める。日付・時刻・作業名は
+  `tableMetaFromSheet()` が先頭3行から拾い、無ければシート名から復元する
+
+
 ## 数値の扱い
 
 - 表示・保存とも **小数点3桁固定**（`fmt` / `fmtInput` が `toFixed(3)`）

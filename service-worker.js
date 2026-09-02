@@ -2,7 +2,7 @@
 // index.html の styles.css / app.js の ?v= も同じ番号に揃える。
 // Service Worker のキャッシュだけでなく、ブラウザのHTTPキャッシュも
 // URL が変わらないと古いファイルを返し続けるため、両方に効かせている。
-const VERSION = "0032";
+const VERSION = "0033";
 const CACHE_NAME = `level-book-vr${VERSION}`;
 const APP_FILES = [
   "./",

@@ -1617,7 +1617,18 @@ function startNewSite() {
 // スマホのExcelはSpreadsheetML(.xls)を開けず、PCでは拡張子不一致の警告が出るため、
 // 依存ライブラリなしで実体のある .xlsx (ZIP + OOXML) を組み立てる。
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-const XLSX_STYLE = { normal: 0, header: 1, num: 2, input: 3, text: 4 };
+const XLSX_STYLE = { normal: 0, header: 1, num: 2, input: 3, text: 4, mm: 5 };
+
+// 基本情報シートの POINTS 一覧が始まる Excel の行番号。
+// basicSheetRows() の見出し8行（LEVEL_APP〜「測点名/数値」）の次から測点が並ぶ。
+// basicSheetRows() を増減したらこの値も合わせること。
+const XLSX_POINTS_ROW = 9;
+const XLSX_POINTS_RANGE = `'基本情報'!$A$${XLSX_POINTS_ROW}:$B$1000`;
+
+// 表シートの先頭に 日付 / 時刻 / 作業名 の3行を置き、4行目が BS…の見出し、5行目からデータ。
+// 見出しの行数を変えたらこの2つを直すだけで済むよう、行番号はここから計算する。
+const XLSX_TABLE_HEADER_ROW = 4;
+const XLSX_TABLE_FIRST_DATA_ROW = XLSX_TABLE_HEADER_ROW + 1;
 
 const crcTable = (() => {
   const table = new Uint32Array(256);
@@ -1754,12 +1765,12 @@ function xlsxSheetXml(sheetRows) {
     return `<row r="${rowNumber}">${cellsXml}</row>`;
   }).join("");
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="4" width="11" customWidth="1"/><col min="5" max="5" width="20" customWidth="1"/></cols><sheetData>${body}</sheetData></worksheet>`;
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="4" width="11" customWidth="1"/><col min="5" max="5" width="20" customWidth="1"/><col min="6" max="6" width="11" customWidth="1"/><col min="7" max="7" width="9" customWidth="1"/></cols><sheetData>${body}</sheetData></worksheet>`;
 }
 
 function xlsxStylesXml() {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="0.000"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Yu Gothic"/></font><font><b/><sz val="11"/><name val="Yu Gothic"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9D8BD"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFBC4"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="5"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="164" fontId="0" fillId="3" borderId="0" xfId="0" applyNumberFormat="1" applyFill="1"/><xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="0.000"/><numFmt numFmtId="165" formatCode="+0;-0;+0"/></numFmts><fonts count="2"><font><sz val="11"/><name val="Yu Gothic"/></font><font><b/><sz val="11"/><name val="Yu Gothic"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFD9D8BD"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFFBC4"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="6"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/><xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="164" fontId="0" fillId="3" borderId="0" xfId="0" applyNumberFormat="1" applyFill="1"/><xf numFmtId="49" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/><xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
 }
 
 function xlsxPackage(sheets) {
@@ -1845,9 +1856,14 @@ function basicSheetRows() {
   ];
 }
 
+// シート名にも同じ情報が入っているが、シート名は31文字で切れるうえ記号が使えない。
+// 表そのものにも 日付 / 時刻 / 作業名 を書いておき、読込時はこちらを優先する。
 function tableSheetRows(table) {
   return [
-    ["BS", "IH", "FS", "GL", "測点名"].map((label) => xlsxText(label, "header")),
+    [xlsxText("日付", "header"), xlsxText(formatSurveyDate(table?.date || ""))],
+    [xlsxText("時刻", "header"), xlsxText(normalizeTimeInput(table?.time))],
+    [xlsxText("作業名", "header"), xlsxText(table?.name || "")],
+    ["BS", "IH", "FS", "GL", "測点名", "基準高", "誤差mm"].map((label) => xlsxText(label, "header")),
     ...xlsxRowsForRows(table.rows || [blankRow()])
   ];
 }
@@ -1877,20 +1893,27 @@ function xlsxRowsForRows(sourceRows) {
   return Array.from({ length: rowCount }, (_, index) => xlsxMeasurementRow(usefulRows[index] || blankRow(), index));
 }
 
-// 見出しが1行目のため、データ index 0 は Excel の 2 行目に載る。
-// 列は A=BS / B=IH / C=FS / D=GL / E=測点名。
+// 日付・時刻・作業名の3行＋見出し1行が上にあるので、データ index 0 は Excel の 5 行目に載る。
+// 列は A=BS / B=IH / C=FS / D=GL / E=測点名 / F=基準高 / G=誤差mm。
+// F は測点名で基本情報シートの基準点一覧を引き、G は (GL - 基準高) × 1000。
+// どちらも読み取り専用の確認列なので、読込側（parseXlsx / parseExcelXml）は A〜E しか見ない。
 function xlsxMeasurementRow(row, index) {
-  const line = index + 2;
+  const line = index + XLSX_TABLE_FIRST_DATA_ROW;
   const ihFormula = index === 0
     ? `IF(A${line}="","",D${line}+A${line})`
     : `IF(ISNUMBER(A${line}),A${line}+D${line},IF(AND(ISNUMBER(B${line - 1}),ISNUMBER(C${line + 1})),B${line - 1},""))`;
   const glFormula = `IF(ISNUMBER(C${line}),B${line - 1}-C${line},"")`;
+  const refFormula = `IF(E${line}="","",IFERROR(VLOOKUP(E${line},${XLSX_POINTS_RANGE},2,FALSE),""))`;
+  const diffFormula = `IF(AND(ISNUMBER(D${line}),ISNUMBER(F${line})),ROUND((D${line}-F${line})*1000,0),"")`;
+  const closure = closureForRow(row);
   return [
     xlsxNumber(row.bs, "input"),
     xlsxFormula(ihFormula, row.ih),
     xlsxNumber(row.fs, "input"),
     index > 0 ? xlsxFormula(glFormula, row.gl) : xlsxNumber(row.gl),
-    xlsxText(row.point || "")
+    xlsxText(row.point || ""),
+    xlsxFormula(refFormula, closure ? closure.ref : ""),
+    xlsxFormula(diffFormula, closure ? Math.round(closure.diff * 1000) : "", "mm")
   ];
 }
 
@@ -2075,8 +2098,9 @@ async function parseXlsx(bytes, filename) {
       continue;
     }
     if (sheetName === "誤差一覧") continue;
-    const tableMeta = tableMetaFromSheetName(sheetName, workbook.meta.date);
-    const dataRows = values.slice(1).map((line) => blankRow({
+    const headerIndex = tableHeaderIndex(values);
+    const tableMeta = tableMetaFromSheet(values, headerIndex, sheetName, workbook.meta.date);
+    const dataRows = values.slice(headerIndex + 1).map((line) => blankRow({
       bs: cleanCsvNumber(line[0]),
       ih: cleanCsvNumber(line[1]),
       fs: cleanCsvNumber(line[2]),
@@ -2122,8 +2146,9 @@ function parseExcelXml(text, filename) {
       return;
     }
     if (sheetName === "誤差一覧") return;
-    const tableMeta = tableMetaFromSheetName(sheetName, workbook.meta.date);
-    const dataRows = values.slice(1).map((line) => blankRow({
+    const headerIndex = tableHeaderIndex(values);
+    const tableMeta = tableMetaFromSheet(values, headerIndex, sheetName, workbook.meta.date);
+    const dataRows = values.slice(headerIndex + 1).map((line) => blankRow({
       bs: cleanCsvNumber(line[0]),
       ih: cleanCsvNumber(line[1]),
       fs: cleanCsvNumber(line[2]),
@@ -2169,6 +2194,31 @@ function excelSheetValues(sheet) {
     });
     return values;
   });
+}
+
+// 表シートの見出し行（A列が "BS"）の位置。
+// 旧形式（1行目が見出し）と新形式（日付/時刻/作業名 の3行が上にある）のどちらも読める。
+function tableHeaderIndex(values) {
+  const index = values.findIndex((line) => String(line?.[0] || "").trim() === "BS");
+  return index >= 0 ? index : 0;
+}
+
+// 日付・時刻・作業名は表の先頭行から拾う。無ければ従来どおりシート名から復元する。
+function tableMetaFromSheet(values, headerIndex, sheetName, fallbackDate) {
+  const fromName = tableMetaFromSheetName(sheetName, fallbackDate);
+  const labels = new Map();
+  values.slice(0, headerIndex).forEach((line) => {
+    const key = String(line?.[0] || "").trim();
+    if (key) labels.set(key, String(line?.[1] ?? "").trim());
+  });
+  const date = labels.get("日付");
+  const time = labels.get("時刻");
+  const name = labels.get("作業名");
+  return {
+    date: date ? normalizeDateInput(date) : fromName.date,
+    time: time ? normalizeTimeInput(time) : fromName.time,
+    name: name || fromName.name
+  };
 }
 
 function tableMetaFromSheetName(sheetName, fallbackDate) {
