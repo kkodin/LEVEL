@@ -1638,33 +1638,69 @@ function startNewSite() {
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const XLSX_STYLE = { normal: 0, header: 1, num: 2, input: 3, text: 4, mm: 5, int: 6, percent: 7 };
 
-// 変位測量の管理値。基本情報シートの LIMIT / WARN に書き出して読み戻す。
-// 警告値は「管理値 × 割合」なので、割合だけ持てば足りる。
-const DEFAULT_LIMIT_MM = 45;
-const DEFAULT_WARN_RATIO = 0.8;
-
-// 基本情報シートの行番号。basicSheetRows() の並びと必ず揃えること。
-// 見出し10行（LEVEL_APP〜「測点名/数値」）の次から測点が並ぶ。
-const XLSX_LIMIT_ROW = 6;
-const XLSX_WARN_ROW = 7;
-const XLSX_POINTS_ROW = 11;
 const XLSX_BASIC_SHEET = "基本情報";
-const XLSX_POINTS_RANGE = `${sheetRef(XLSX_BASIC_SHEET)}!$A$${XLSX_POINTS_ROW}:$B$1000`;
 
 // 数式でシートを指すときの名前。シート名の ' は '' に重ねて escape する。
 function sheetRef(name) {
   return `'${String(name || "").replace(/'/g, "''")}'`;
 }
 
-function limitMm() {
-  const parsed = num(meta.limit);
-  return parsed === null || parsed <= 0 ? DEFAULT_LIMIT_MM : parsed;
+// ── 変位測量の規格値 ───────────────────────────────────────────────────────
+// 保存ダイアログ・基本情報シート・変位グラフシートの3か所が、すべてこの表から
+// 作られる。**並び順を変えると基本情報シートの行番号も動く**ので、
+// 触ったら XLSX_LIMIT_FIRST_ROW / XLSX_POINTS_ROW を必ず合わせること。
+//
+// kind:"ratio" は「of で指した規格値の何％か」。値そのものは持たない。
+// 並びは変位グラフシートに出す上から下の順（上限 → 社内上限 → 社内下限 → 下限）。
+const LIMIT_SPECS = [
+  { key: "upper",   tag: "UPPER",    kind: "mm",    label: "上限規格値",     fallback: 45 },
+  { key: "upperIn", tag: "UPPER_IN", kind: "ratio", label: "社内上限規格値", fallback: 0.8, of: "upper" },
+  { key: "lowerIn", tag: "LOWER_IN", kind: "ratio", label: "社内下限規格値", fallback: 0.8, of: "lower" },
+  { key: "lower",   tag: "LOWER",    kind: "mm",    label: "下限規格値",     fallback: -45 }
+];
+
+// 基本情報シートの行番号。basicSheetRows() の並びと必ず揃えること。
+const XLSX_LIMIT_FIRST_ROW = 6;
+// 規格値のあと 空行 / POINTS / 見出し と続き、その次から測点が並ぶ。
+const XLSX_POINTS_ROW = XLSX_LIMIT_FIRST_ROW + LIMIT_SPECS.length + 3;
+
+function limitRowNumber(spec) {
+  return XLSX_LIMIT_FIRST_ROW + LIMIT_SPECS.indexOf(spec);
 }
 
-function warnRatio() {
-  const parsed = num(meta.warnRatio);
-  return parsed === null || parsed <= 0 || parsed > 1 ? DEFAULT_WARN_RATIO : parsed;
+function limitSpec(key) {
+  return LIMIT_SPECS.find((spec) => spec.key === key) || null;
 }
+
+// 割合は 0〜1。範囲外・未入力は既定値に戻す。
+function limitValue(spec) {
+  const parsed = num(meta[`${spec.key}Value`]);
+  if (parsed === null) return spec.fallback;
+  if (spec.kind === "ratio" && (parsed <= 0 || parsed > 1)) return spec.fallback;
+  return parsed;
+}
+
+// チェックボックス。未設定（undefined）は「使う」。
+function limitOn(spec) {
+  const flag = meta[`${spec.key}On`];
+  return typeof flag === "boolean" ? flag : true;
+}
+
+// 変位グラフに引く線の値(mm)。割合の行は「元の規格値 × 割合」。
+function limitLineValue(spec) {
+  if (spec.kind !== "ratio") return limitValue(spec);
+  const parent = limitSpec(spec.of);
+  return parent ? limitValue(parent) * limitValue(spec) : null;
+}
+
+// 変位グラフの線に使う数式。基本情報シートのセルを指す。
+function limitLineFormula(spec) {
+  const cell = (target) => `${sheetRef(XLSX_BASIC_SHEET)}!$B$${limitRowNumber(target)}`;
+  if (spec.kind !== "ratio") return cell(spec);
+  const parent = limitSpec(spec.of);
+  return parent ? `${cell(parent)}*${cell(spec)}` : cell(spec);
+}
+const XLSX_POINTS_RANGE = `${sheetRef(XLSX_BASIC_SHEET)}!$A$${XLSX_POINTS_ROW}:$B$1000`;
 
 // 表シートの先頭に 日付 / 時刻 / 作業名 の3行を置き、4行目が BS…の見出し、5行目からデータ。
 // 見出しの行数を変えたらこの2つを直すだけで済むよう、行番号はここから計算する。
@@ -1867,17 +1903,27 @@ function exportExcel() {
     "ファイルを保存",
     [
       { id: "modal-site-name", label: "現場名（ファイル名）", value: meta.site || "", type: "text" },
-      { id: "modal-limit", label: "管理値 (mm)", value: String(limitMm()), type: "number" },
-      { id: "modal-warn", label: "警告値 (%)", value: String(Math.round(warnRatio() * 100)), type: "number" }
+      // 規格値は4本とも同じ形。チェックを外した行は変位グラフに引かない。
+      ...LIMIT_SPECS.map((spec) => ({
+        id: `modal-limit-${spec.key}`,
+        label: `${spec.label} ${spec.kind === "ratio" ? "(%)" : "(mm)"}`,
+        value: spec.kind === "ratio" ? String(Math.round(limitValue(spec) * 100)) : String(limitValue(spec)),
+        type: "number",
+        toggle: limitOn(spec)
+      }))
     ],
-    (values) => {
+    (values, checks) => {
       const site = (values["modal-site-name"] || "").trim();
       if (!site) return;
       meta.site = site;
-      // 空欄・変な値は既定に戻す（limitMm / warnRatio が弾く）
-      meta.limit = num(values["modal-limit"]);
-      const percent = num(values["modal-warn"]);
-      meta.warnRatio = percent === null ? null : percent / 100;
+      // 空欄・範囲外は null にしておく。limitValue() が既定値に戻す。
+      LIMIT_SPECS.forEach((spec) => {
+        const id = `modal-limit-${spec.key}`;
+        const entered = num(values[id]);
+        meta[`${spec.key}Value`] = entered === null ? null
+          : spec.kind === "ratio" ? entered / 100 : entered;
+        meta[`${spec.key}On`] = !!checks[id];
+      });
       if (!meta.date) meta.date = todayString();
       syncMetaToInputs();
       syncActiveTable();
@@ -1908,8 +1954,8 @@ function buildXlsxWorkbook() {
 }
 
 // A列のタグ（LEVEL_APP / TITLE / … / POINTS）が読込側の目印。
-// C列は人が読むための説明で、読込では見ない。
-// **行を増減したら XLSX_LIMIT_ROW / XLSX_WARN_ROW / XLSX_POINTS_ROW を必ず直すこと。**
+// C列は人が読むための説明で、読込では見ない。D列の ○/× は使う・使わない。
+// **行を増減したら XLSX_LIMIT_FIRST_ROW / XLSX_POINTS_ROW を必ず直すこと。**
 function basicSheetRows() {
   return [
     [xlsxText("LEVEL_APP"), xlsxText("4")],
@@ -1917,8 +1963,12 @@ function basicSheetRows() {
     [xlsxText("SITE"), xlsxText(meta.site || "")],
     [xlsxText("DATE"), xlsxText(meta.date || "")],
     [xlsxText("PLACE"), xlsxText(meta.place || "")],
-    [xlsxText("LIMIT"), xlsxInteger(limitMm(), "int"), xlsxText("管理値 (mm)")],
-    [xlsxText("WARN"), xlsxNumber(warnRatio(), "percent"), xlsxText("警告値の割合")],
+    ...LIMIT_SPECS.map((spec) => [
+      xlsxText(spec.tag),
+      spec.kind === "ratio" ? xlsxNumber(limitValue(spec), "percent") : xlsxNumber(limitValue(spec), "int"),
+      xlsxText(spec.kind === "ratio" ? `${spec.label}の割合` : `${spec.label} (mm)`),
+      xlsxText(limitOn(spec) ? "○" : "×")
+    ]),
     [],
     [xlsxText("POINTS"), xlsxText("初期値")],
     [xlsxText("測点名", "header"), xlsxText("数値", "header"), xlsxText("変位グラフ", "header")],
@@ -2031,11 +2081,6 @@ function displacementSheetRows(tableSheets) {
   const points = displacementPoints(ordered);
   if (!points.length) return null;
 
-  const limitCell = `${sheetRef(XLSX_BASIC_SHEET)}!$B$${XLSX_LIMIT_ROW}`;
-  const warnCell = `${sheetRef(XLSX_BASIC_SHEET)}!$B$${XLSX_WARN_ROW}`;
-  const limit = limitMm();
-  const warn = limit * warnRatio();
-
   const nameRow = [xlsxText("作業名", "header"), ...ordered.map(({ table, index }) => xlsxText(table?.name || `表${index + 1}`))];
   const labelRow = [xlsxText("日時", "header"), ...ordered.map(({ table, index }) => xlsxText(displacementColumnLabel(table, index)))];
 
@@ -2051,17 +2096,19 @@ function displacementSheetRows(tableSheets) {
     ];
   });
 
-  const limitRow = [xlsxText("管理値 (mm)", "header"), ...ordered.map(() => xlsxFormula(limitCell, limit, "int"))];
-  const warnRow = [xlsxText("警告値 (mm)", "header"), ...ordered.map(() => xlsxFormula(`${limitCell}*${warnCell}`, warn, "int"))];
+  // チェックを入れた規格値だけ、測点行の下に横一列で引く。
+  const limitRows = LIMIT_SPECS.filter(limitOn).map((spec) => [
+    xlsxText(`${spec.label} (mm)`, "header"),
+    ...ordered.map(() => xlsxFormula(limitLineFormula(spec), limitLineValue(spec), "int"))
+  ]);
 
   return [
     nameRow,
     labelRow,
     ...pointRows,
-    limitRow,
-    warnRow,
+    ...limitRows,
     [],
-    [xlsxText(`※ 変位は「測定値 − 初期値」。管理値・警告値は ${XLSX_BASIC_SHEET}シートの LIMIT / WARN で変えられます`)],
+    [xlsxText(`※ 変位は「測定値 − 初期値」。規格値は${XLSX_BASIC_SHEET}シートで変えられます（使わない行は保存のダイアログでチェックを外す）`)],
     [xlsxText("※ 値は測点名で引いているので、行や測点を消しても他の列は壊れません")]
   ];
 }
@@ -2372,8 +2419,24 @@ function readExcelBasicSheet(values, workbook, filename) {
     if (tag === "SITE") workbook.meta.site = line[1] || "";
     if (tag === "DATE") workbook.meta.date = normalizeDateInput(line[1] || "");
     if (tag === "PLACE") workbook.meta.place = line[1] || "";
-    if (tag === "LIMIT") workbook.meta.limit = num(line[1]);
-    if (tag === "WARN") workbook.meta.warnRatio = num(line[1]);
+    // 旧形式（管理値＝上限規格値 / 警告値＝社内上限規格値）。下限は無いので使わない扱い。
+    if (tag === "LIMIT") {
+      workbook.meta.upperValue = num(line[1]);
+      workbook.meta.upperOn = true;
+      workbook.meta.lowerOn = false;
+      workbook.meta.lowerInOn = false;
+    }
+    if (tag === "WARN") {
+      workbook.meta.upperInValue = num(line[1]);
+      workbook.meta.upperInOn = true;
+    }
+    const spec = LIMIT_SPECS.find((item) => item.tag === tag);
+    if (spec) {
+      workbook.meta[`${spec.key}Value`] = num(line[1]);
+      // D列が無い古いファイルは「使う」扱い
+      const mark = String(line[3] ?? "").trim();
+      workbook.meta[`${spec.key}On`] = mark === "" ? true : mark === "○";
+    }
     if (section === "POINTS" && tag !== "測点名") {
       const name = line[0]?.trim();
       const value = fmtInput(line[1] || "");
@@ -2827,10 +2890,29 @@ function showInputModal(title, fields, onConfirm) {
   const container = $("#inlineModalFields");
   container.innerHTML = "";
   fields.forEach((f) => {
-    const label = document.createElement("label");
-    label.innerHTML = `<span>${escapeHtml(f.label)}</span>
-      <input id="${escapeHtml(f.id)}" type="${escapeHtml(f.type || "text")}" value="${escapeHtml(f.value || "")}">`;
-    container.appendChild(label);
+    const input = `<input id="${escapeHtml(f.id)}" type="${escapeHtml(f.type || "text")}" value="${escapeHtml(f.value || "")}">`;
+    if (f.toggle === undefined) {
+      const label = document.createElement("label");
+      label.innerHTML = `<span>${escapeHtml(f.label)}</span>${input}`;
+      container.appendChild(label);
+      return;
+    }
+    // 使う・使わないのチェック付き。
+    // **チェックと入力欄を1つの label で包まないこと。** 入力欄を触るたびに
+    // label 経由でチェックが反転する。チェックだけを別の label で包む。
+    const field = document.createElement("div");
+    field.className = "modal-field";
+    field.innerHTML = `<label class="modal-check"><input id="${escapeHtml(f.id)}-on" type="checkbox"`
+      + `${f.toggle ? " checked" : ""}><span>${escapeHtml(f.label)}</span></label>${input}`;
+    const box = field.querySelector("input[type=checkbox]");
+    const value = field.querySelector(`#${CSS.escape(f.id)}`);
+    const sync = () => {
+      value.disabled = !box.checked;
+      field.classList.toggle("off", !box.checked);
+    };
+    box.addEventListener("change", sync);
+    sync();
+    container.appendChild(field);
   });
   $("#inlineModal").classList.remove("hidden");
   if (fields[0]) {
@@ -2853,10 +2935,13 @@ function bindInlineModal() {
     if (!_modalCallback) { closeInlineModal(); return; }
     if (_modalFields.length) {
       const values = {};
+      const checks = {};
       _modalFields.forEach((f) => {
+        // disabled でも .value は読めるので、チェックを外した欄の値も残る
         values[f.id] = document.getElementById(f.id)?.value || "";
+        if (f.toggle !== undefined) checks[f.id] = !!document.getElementById(`${f.id}-on`)?.checked;
       });
-      _modalCallback(values);
+      _modalCallback(values, checks);
     } else {
       _modalCallback();
     }

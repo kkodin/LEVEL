@@ -161,6 +161,10 @@ input:focus {
   color: var(--muted);
   line-height: 1.5;
 }
+#inlineModalFields {
+  display: grid;
+  gap: 12px;
+}
 .inline-modal label {
   display: grid;
   gap: 4px;
@@ -170,6 +174,29 @@ input:focus {
   font-weight: 800;
   color: var(--muted);
 }
+/* 使う・使わないのチェック付きの欄。
+   チェックと入力欄を同じ label に入れると、入力欄を触るたびに反転する。 */
+.modal-field {
+  display: grid;
+  gap: 4px;
+}
+.inline-modal .modal-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.inline-modal .modal-check input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+.modal-field.off input:not([type="checkbox"]) {
+  background: #eef1ee;
+  color: var(--muted);
+}
+.modal-field.off .modal-check span { opacity: 0.55; }
 .inline-modal-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
