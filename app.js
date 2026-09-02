@@ -1261,14 +1261,23 @@ function renderPointList() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "point-item";
-    button.innerHTML = `<strong>${escapeHtml(point.name)}</strong><span>${escapeHtml(point.value)}</span>`;
-    button.addEventListener("click", () => {
+    // 変位のチェックは button の中の span。入れ子の button は使えないので
+    // クリックを click ハンドラで振り分ける。
+    const onChart = isChartPoint(point);
+    button.innerHTML = `<strong>${escapeHtml(point.name)}</strong><span>${escapeHtml(point.value)}</span>`
+      + `<span class="point-chart${onChart ? " on" : ""}" role="checkbox" aria-checked="${onChart}"`
+      + ` title="変位グラフに出す">${onChart ? "☑" : "☐"} 変位</span>`;
+    button.addEventListener("click", (event) => {
       if (button.dataset.swiped === "1") {
         button.dataset.swiped = "";
         return;
       }
       if (button.classList.contains("delete-ready")) {
         deleteSavedPoint(index);
+        return;
+      }
+      if (event.target.closest(".point-chart")) {
+        toggleChartPoint(index);
         return;
       }
       recallPoint(point);
@@ -1902,8 +1911,13 @@ function basicSheetRows() {
     [xlsxText("WARN"), xlsxNumber(warnRatio(), "percent"), xlsxText("警告値の割合")],
     [],
     [xlsxText("POINTS"), xlsxText("初期値")],
-    [xlsxText("測点名", "header"), xlsxText("数値", "header")],
-    ...savedPoints.map((point) => [xlsxText(point.name), xlsxNumber(point.value)])
+    [xlsxText("測点名", "header"), xlsxText("数値", "header"), xlsxText("変位グラフ", "header")],
+    // C列の ○/× は変位グラフに出すかどうか。空欄なら自動判定にまかせる。
+    ...savedPoints.map((point) => [
+      xlsxText(point.name),
+      xlsxNumber(point.value),
+      xlsxText(isChartPoint(point) ? "○" : "×")
+    ])
   ];
 }
 
@@ -1938,21 +1952,43 @@ const DISPLACEMENT_SHEET = "変位グラフ";
 
 // グラフに出す測点。登録済みの基準点のうち、
 // 行0の器械据付基準（KBM など。常に変位0）を除き、どこかの表に出てくるものだけ。
-function displacementPoints(targetTables) {
-  const bases = new Set();
-  targetTables.forEach(({ table }) => {
+// 行0に据えている器械据付基準（KBM 等）。ここは常に変位0なのでグラフに出さない。
+function basePointNames() {
+  const names = new Set();
+  tables.forEach((table) => {
     const name = table?.rows?.[0]?.point;
-    if (name) bases.add(name);
+    if (name) names.add(name);
   });
+  return names;
+}
+
+// 変位グラフに出すか。`point.chart` が真偽値なら測点ごとの指定、
+// 未設定（undefined）なら自動判定にまかせる。
+// **登録済測点のチェックはこの値を書き換える。既定を持たせないこと**
+// （既定を入れると、基準点を後から足したときに勝手に外れる／入る）。
+function isChartPoint(point) {
+  if (typeof point?.chart === "boolean") return point.chart;
+  return !basePointNames().has(point?.name);
+}
+
+function toggleChartPoint(index) {
+  const point = savedPoints[index];
+  if (!point) return;
+  point.chart = !isChartPoint(point);
+  renderPointList();
+  saveSoon();
+}
+
+function displacementPoints(targetTables) {
   const measured = new Set();
   targetTables.forEach(({ table }) => {
-    (table?.rows || []).forEach((row, index) => {
-      if (index > 0 && row.point) measured.add(row.point);
+    (table?.rows || []).forEach((row) => {
+      if (row.point) measured.add(row.point);
     });
   });
   return savedPoints
-    .map((point) => point.name)
-    .filter((name) => !bases.has(name) && measured.has(name));
+    .filter((point) => isChartPoint(point) && measured.has(point.name))
+    .map((point) => point.name);
 }
 
 // 「8/25 21:30」。日付が無ければ作業名で代用する。
@@ -2331,7 +2367,10 @@ function readExcelBasicSheet(values, workbook, filename) {
     if (section === "POINTS" && tag !== "測点名") {
       const name = line[0]?.trim();
       const value = fmtInput(line[1] || "");
-      if (name && value) workbook.points.push({ name, value });
+      // C列が無い古いファイルは undefined のまま＝自動判定
+      const mark = String(line[2] ?? "").trim();
+      const chart = mark === "○" ? true : mark === "×" ? false : undefined;
+      if (name && value) workbook.points.push(chart === undefined ? { name, value } : { name, value, chart });
     }
   });
 }

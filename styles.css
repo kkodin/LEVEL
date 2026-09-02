@@ -735,7 +735,7 @@ body.input-reject::after {
 .point-item {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 10px;
   min-height: 58px;
   padding: 10px 12px;
@@ -772,6 +772,24 @@ body.input-reject::after {
 .point-item strong { font-size: 15px; }
 .point-item span { font-size: 15px; font-weight: 800; }
 .point-item.swiping { opacity: 0.72; }
+
+/* 変位グラフに出すかの切り替え。button の入れ子は作れないので span で作る。 */
+.point-chart {
+  align-self: center;
+  padding: 6px 8px;
+  border: 1px solid #b9c5bb;
+  border-radius: 6px;
+  background: #eef2ee;
+  color: #5b6a5e;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.point-chart.on {
+  border-color: var(--accent, #0f7b5f);
+  background: #d8ece3;
+  color: var(--accent, #0f7b5f);
+}
 
 @media (min-width: 720px) {
   .app {
