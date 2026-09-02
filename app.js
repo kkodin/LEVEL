@@ -1267,7 +1267,17 @@ function renderPointList() {
     button.innerHTML = `<strong>${escapeHtml(point.name)}</strong><span>${escapeHtml(point.value)}</span>`
       + `<span class="point-chart${onChart ? " on" : ""}" role="checkbox" aria-checked="${onChart}"`
       + ` title="変位グラフに出す">${onChart ? "☑" : "☐"} 変位</span>`;
+    // **押した瞬間の当たり位置を pointerdown で控えること。**
+    // bindSwipeDelete が setPointerCapture するので、続く click の target は
+    // キャプチャした .point-item 自身に付け替わり、中の span が見えなくなる。
+    // click だけを見ていると、チップを押しても recallPoint に落ちて
+    // 行0の基準点が書き換わり、自動判定が別の測点へずれる。
+    button.addEventListener("pointerdown", (event) => {
+      button.dataset.hitChart = event.target.closest(".point-chart") ? "1" : "";
+    });
     button.addEventListener("click", (event) => {
+      const hitChart = button.dataset.hitChart === "1";
+      button.dataset.hitChart = "";
       if (button.dataset.swiped === "1") {
         button.dataset.swiped = "";
         return;
@@ -1276,7 +1286,7 @@ function renderPointList() {
         deleteSavedPoint(index);
         return;
       }
-      if (event.target.closest(".point-chart")) {
+      if (hitChart || event.target.closest(".point-chart")) {
         toggleChartPoint(index);
         return;
       }

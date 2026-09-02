@@ -185,8 +185,21 @@ A          B      C     D      E       F       G
   足したときに勝手に外れる／入る。「未設定＝自動」を保つ
 - 登録済測点（`#pointList`）の各行に「☑ 変位」のチップがある。
   **`.point-item` は `<button>` なので入れ子の `<input>`/`<button>` は置けない。**
-  `span.point-chart` にして、click ハンドラで
-  `event.target.closest(".point-chart")` を見て振り分けている
+  `span.point-chart` にしてある
+
+### チップと行タップの振り分け（踏んだ落とし穴）
+
+**`click` の `event.target` を見てはいけない。** `bindSwipeDelete()` が
+`pointerdown` で `setPointerCapture()` するため、続く `click` の target は
+キャプチャした `.point-item` 自身に**付け替わる**。中の `span` は見えない。
+
+`pointerdown` の時点で当たり位置を `button.dataset.hitChart` に控え、
+`click` ではそれを見る。**この控えを外さないこと。**
+
+外すと `recallPoint()` に落ちて**行0の基準点が黙って書き換わる**。
+`basePointNames()` が変わるので、押した測点は自動判定で ☐ に、
+それまで行0だった測点は ☑ に化ける。
+「外したら別のものにチェックが入る」という形で出る（2026-09-02 に修正）。
 - 表が1つしか無い／対象測点が無いときは**シートごと作らない**
 - 管理値・警告値は基本情報シートの `LIMIT` / `WARN` を参照する。ここが唯一の出どころ
 - シート名は数式に埋めるので `sheetRef()` で `'` を `''` に escape すること
