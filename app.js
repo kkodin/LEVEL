@@ -1028,6 +1028,7 @@ function openPointDrawer(row) {
 }
 
 function applyBaseEntry() {
+  if (blockedByLock()) return;
   if (!["base", "resume"].includes(drawerMode) || drawerTargetRow === null || drawerSaved) return;
   const name = $("#savedPointName").value.trim();
   const value = fmtInput($("#savedPointValue").value);
@@ -1075,6 +1076,14 @@ function saveCurrentPoint() {
   readMetaFromInputs();
   const shouldCloseAfterSave = drawerMode !== "normal";
   registerSavedPoint(name, value);
+  // 台帳への登録は保護中でもしてよいが、野帳の行を書き換えるのは止める。
+  if (locked) {
+    rejectInput();
+    renderPointList();
+    renderPointSuggestions();
+    saveSoon();
+    return;
+  }
   if (drawerMode === "base" && drawerTargetRow !== null && rows[drawerTargetRow]) {
     rows[drawerTargetRow] = blankRow({ ...rows[drawerTargetRow], point: name, gl: value, isBase: true });
     selected = { row: drawerTargetRow, field: drawerTargetRow === 0 ? "bs" : "gl" };
@@ -1114,6 +1123,7 @@ function finishSetupAndChooseBasePoint() {
 }
 
 function recallPoint(point) {
+  if (blockedByLock()) return;
   const row = ["base", "resume"].includes(drawerMode) && drawerTargetRow !== null ? drawerTargetRow : 0;
   if (!rows[row]) rows[row] = blankRow();
   rows[row] = blankRow({ ...rows[row], point: point.name, gl: point.value, isBase: true });
@@ -1242,6 +1252,7 @@ function addBasePointFromSheet() {
 }
 
 function applyBasePointSelection(point) {
+  if (blockedByLock()) return;
   const row = basePointSheetTarget ?? 0;
   if (!rows[row]) rows[row] = blankRow();
   rows[row] = blankRow({ ...rows[row], point: point.name, gl: point.value, isBase: true });
@@ -1345,6 +1356,17 @@ function updateSavePointButton() {
   button.disabled = !name || !value;
 }
 
+// 保護中に野帳を書き換えようとしたら、黙って無視せず知らせて止める。
+// **rows[...] を書き換える経路にはすべてこれを通すこと。**
+// 登録済測点のタップ（recallPoint）が素通りしていて、保護してあるのに
+// 行0の基準点と基準高が別の測点に差し替わる事故が起きた（2026-09-02）。
+// 「保護中は表を触れない」はこのアプリの安全装置なので、穴を残さないこと。
+function blockedByLock() {
+  if (!locked) return false;
+  rejectInput();
+  return true;
+}
+
 function toggleLock() {
   locked = !locked;
   updateLockButton();
@@ -1413,6 +1435,8 @@ function selectFirstBs() {
 }
 
 function deleteSavedPoint(index) {
+  // 台帳から消すと表の 基準高・誤差 の表示が変わる。保護中は止める。
+  if (blockedByLock()) return;
   savedPoints.splice(index, 1);
   renderPointList();
   saveSoon();
@@ -1522,6 +1546,12 @@ function bind() {
   });
   bindDrawerSwipe();
   $("#basePoint").addEventListener("input", () => {
+    // 保護中はここからも書き換えさせない。値は元に戻す。
+    if (locked) {
+      rejectInput();
+      syncBaseInputs();
+      return;
+    }
     rows[0].point = $("#basePoint").value;
     render();
     saveSoon();
@@ -2031,6 +2061,7 @@ function isChartPoint(point) {
   return !basePointNames().has(point?.name);
 }
 
+// 変位グラフに出すかどうかは野帳を書き換えないので、保護中でも切り替えてよい。
 function toggleChartPoint(index) {
   const point = savedPoints[index];
   if (!point) return;
@@ -2853,6 +2884,7 @@ function registerPickerPointAsBase() {
 }
 
 function confirmPointPicker(name) {
+  if (blockedByLock()) { closePointPicker(); return; }
   const n = name !== undefined ? String(name).trim() : $("#pointPickerInput").value.trim();
   const row = pickerTargetRow;
   closePointPicker();
